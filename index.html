@@ -1,0 +1,1183 @@
+<title>Compiladores · Sesión 2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: cabecera de curso + barra de pestañas fija; cada pestaña es una columna de lectura (~70ch) con paneles de práctica más anchos. Tema: el compilador como tubería, tokens en tipografía monoespaciada. */
+:root{
+  --bg:#f4f5fa; --surface:#ffffff; --ink:#151a30; --muted:#585f7a; --line:#dcdfeb;
+  --accent:#3a3fd6; --accent-ink:#ffffff; --soft:#eceefc; --token:#b45f00; --token-soft:#fff2e0;
+  --ok:#1d7f47; --ok-soft:#e3f5ea; --bad:#b83434; --bad-soft:#fbe7e7; --code:#f0f1f8;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1120; --surface:#161a2d; --ink:#e6e8f5; --muted:#9ba1bd; --line:#2a2f49;
+  --accent:#8e92ff; --accent-ink:#0e1120; --soft:#1f2342; --token:#f2a745; --token-soft:#33260f;
+  --ok:#55c98a; --ok-soft:#14301f; --bad:#ff8181; --bad-soft:#3a1a1d; --code:#1b2036; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1120; --surface:#161a2d; --ink:#e6e8f5; --muted:#9ba1bd; --line:#2a2f49;
+  --accent:#8e92ff; --accent-ink:#0e1120; --soft:#1f2342; --token:#f2a745; --token-soft:#33260f;
+  --ok:#55c98a; --ok-soft:#14301f; --bad:#ff8181; --bad-soft:#3a1a1d; --code:#1b2036; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--f-body)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+.wrap{max-width:1040px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);line-height:1.15;text-wrap:balance;margin:0}
+h2{font-size:1.75rem;font-weight:700}
+h3{font-size:1.2rem;font-weight:700}
+p{margin:0}
+code,.mono{font-family:var(--f-mono);font-size:.9em}
+code{background:var(--code);padding:.08em .35em;border-radius:5px}
+a{color:var(--accent)}
+.muted{color:var(--muted)}
+.eyebrow{font:600 .75rem/1 var(--f-body);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+
+/* Cabecera */
+header.top{background:var(--surface);border-bottom:1px solid var(--line)}
+header.top .wrap{padding-block:28px 22px;display:grid;gap:14px}
+.course{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline}
+.course h1{font-size:clamp(1.9rem,4.6vw,2.9rem);font-weight:700;letter-spacing:-.01em}
+.course h1 span{color:var(--accent)}
+.lead{max-width:68ch;color:var(--muted)}
+.pipe{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font:500 .8rem var(--f-mono)}
+.pipe span{padding:4px 9px;border:1px solid var(--line);border-radius:999px;background:var(--bg)}
+.pipe span.a{border-color:var(--accent);color:var(--accent)}
+.pipe span.s{border-color:var(--token);color:var(--token)}
+.pipe i{font-style:normal;color:var(--muted)}
+
+/* Pestañas */
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line)}
+nav.tabs .wrap{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none}
+nav.tabs button{flex:0 0 auto;font:600 .95rem var(--f-body);color:var(--muted);background:none;border:0;border-bottom:3px solid transparent;padding:14px 14px 11px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+nav.tabs button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+main .wrap{padding-block:32px 64px}
+section.panel{display:grid;gap:36px}
+.prose{max-width:70ch;display:grid;gap:14px}
+.block{display:grid;gap:16px}
+
+/* Ruta */
+.agenda{display:grid;gap:0;border-left:2px solid var(--line);margin-left:6px}
+.slot{display:grid;grid-template-columns:96px 1fr;gap:16px;padding:14px 0 14px 20px;position:relative}
+.slot::before{content:"";position:absolute;left:-7px;top:22px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--accent)}
+.slot.pause::before{border-color:var(--muted)}
+.slot .t{font:600 .9rem var(--f-mono);color:var(--accent);font-variant-numeric:tabular-nums}
+.slot.pause .t{color:var(--muted)}
+.slot h3{font-size:1.05rem}
+.slot p{color:var(--muted);font-size:.95rem;margin-top:3px}
+.slot .go{font-size:.85rem;margin-top:6px;display:inline-block}
+.bar{display:flex;height:12px;border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar div{height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.85rem;color:var(--muted)}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.outcomes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.outcome{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:6px}
+.outcome .eyebrow{color:var(--accent)}
+
+/* Teoría */
+.toc{display:flex;flex-wrap:wrap;gap:8px}
+.toc a{font-size:.88rem;text-decoration:none;padding:6px 11px;border:1px solid var(--line);border-radius:999px;color:var(--ink);background:var(--surface)}
+.compare{width:100%;border-collapse:collapse;font-size:.94rem;min-width:560px}
+.compare th,.compare td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.compare th{font-size:.8rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.scroll{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.phases{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px}
+.phase{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:8px;align-content:start}
+.phase .tag{font:600 .72rem var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.phase.an .tag{color:var(--accent)}
+.phase.sy .tag{color:var(--token)}
+.io{font:400 .82rem var(--f-mono);color:var(--muted);display:grid;gap:2px}
+.io b{color:var(--ink);font-weight:600}
+.callout{border-left:4px solid var(--accent);background:var(--soft);padding:14px 16px;border-radius:0 var(--r) var(--r) 0;max-width:70ch}
+.callout.warn{border-color:var(--token);background:var(--token-soft)}
+pre.code{font:400 .88rem/1.55 var(--f-mono);background:var(--code);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;margin:0;overflow-x:auto;white-space:pre}
+.trace{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.trace > div{display:grid;gap:6px;min-width:0}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;overflow-x:auto}
+.diagram svg{display:block;margin:0 auto;max-width:100%;height:auto}
+.gloss{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px 24px}
+.gloss div{border-top:1px solid var(--line);padding-top:8px}
+.gloss dt{font-weight:600}
+.gloss dd{margin:2px 0 0;color:var(--muted);font-size:.94rem}
+
+/* Componentes interactivos */
+.lab{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:16px}
+.lab-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:baseline;justify-content:space-between}
+.btn{font:600 .92rem var(--f-body);border-radius:8px;padding:9px 16px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input[type=text],input[type=email],select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+textarea{min-height:140px;font:400 .85rem var(--f-mono)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 .82rem var(--f-mono);padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.chip:hover{border-color:var(--accent)}
+.steps{display:flex;flex-wrap:wrap;gap:6px}
+.steps button{font:600 .8rem var(--f-body);padding:7px 11px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--muted);cursor:pointer}
+.steps button.done{color:var(--ink)}
+.steps button.cur{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.steps button.err{background:var(--bad);border-color:var(--bad);color:#fff}
+.stage{display:grid;gap:12px;min-width:0}
+.stage h4{margin:0;font:700 1rem var(--f-display)}
+.toks{display:flex;flex-wrap:wrap;gap:8px}
+.tok{display:grid;border:1px solid var(--line);border-radius:8px;overflow:hidden;font-family:var(--f-mono);font-size:.82rem;min-width:64px;text-align:center}
+.tok .lx{padding:6px 8px;font-weight:600}
+.tok .cl{padding:3px 8px;font-size:.7rem;border-top:1px solid var(--line);color:var(--muted);background:var(--bg)}
+.tok.id .lx{color:var(--accent)}
+.tok.num .lx{color:var(--token)}
+.symt{border-collapse:collapse;font:400 .85rem var(--f-mono);min-width:300px;width:100%}
+.symt th,.symt td{border-bottom:1px solid var(--line);padding:6px 10px;text-align:left}
+.symt th{font-family:var(--f-body);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.errbox{border:1px solid var(--bad);background:var(--bad-soft);color:var(--ink);border-radius:var(--r);padding:12px 14px}
+.errbox b{color:var(--bad)}
+.okbox{border:1px solid var(--ok);background:var(--ok-soft);border-radius:var(--r);padding:12px 14px}
+.notes{margin:0;padding-left:18px;color:var(--muted);font-size:.92rem}
+svg .n-rect{fill:var(--bg);stroke:var(--line)}
+svg .n-rect.op{fill:var(--soft);stroke:var(--accent)}
+svg .n-rect.lf{fill:var(--surface);stroke:var(--line)}
+svg .n-rect.cv{fill:var(--token-soft);stroke:var(--token)}
+svg .n-txt{fill:var(--ink);font:600 13px var(--f-mono)}
+svg .n-sub{fill:var(--muted);font:400 10.5px var(--f-mono)}
+svg .edge{stroke:var(--muted);stroke-width:1.3;fill:none}
+svg .lbl{fill:var(--ink);font:600 12.5px var(--f-body)}
+svg .lbl2{fill:var(--muted);font:400 11px var(--f-body)}
+svg .box{fill:var(--surface);stroke:var(--line);stroke-width:1.2}
+svg .box.a{stroke:var(--accent);fill:var(--soft)}
+svg .box.s{stroke:var(--token);fill:var(--token-soft)}
+svg .box.side{fill:var(--bg);stroke:var(--muted);stroke-dasharray:4 3}
+svg .arr{stroke:var(--muted);stroke-width:1.3;fill:none}
+svg .link{stroke:var(--line);stroke-width:1;fill:none}
+svg .ah{fill:var(--muted)}
+
+.qlist{display:grid;gap:14px}
+.q{border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;background:var(--bg);display:grid;gap:10px}
+.q .stem{font-weight:500}
+.opts{display:grid;gap:6px}
+.opt{display:flex;gap:10px;align-items:flex-start;text-align:left;font:inherit;font-size:.95rem;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer;width:100%}
+.opt:hover{border-color:var(--accent)}
+.opt .k{font:600 .8rem var(--f-mono);color:var(--muted);min-width:1.2em}
+.opt.sel{border-color:var(--accent);background:var(--soft)}
+.opt.right{border-color:var(--ok);background:var(--ok-soft)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-soft)}
+.fb{font-size:.9rem;color:var(--muted)}
+.fb.good{color:var(--ok)} .fb.badc{color:var(--bad)}
+.err-items{display:grid;gap:10px}
+.err-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--bg)}
+.err-item code{background:none;padding:0;font-size:.92rem;overflow-wrap:anywhere}
+.err-item .pick{display:flex;gap:4px;flex-wrap:wrap}
+.err-item .pick button{font:600 .76rem var(--f-body);padding:6px 9px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+.err-item .pick button.right{background:var(--ok);border-color:var(--ok);color:#fff}
+.err-item .pick button.wrong{background:var(--bad);border-color:var(--bad);color:#fff}
+.err-item .why{grid-column:1/-1;font-size:.88rem;color:var(--muted)}
+@media (max-width:560px){.err-item{grid-template-columns:1fr}.slot{grid-template-columns:1fr;gap:4px}}
+.order-out{min-height:48px;border:1px dashed var(--line);border-radius:var(--r);padding:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.order-out .chip{cursor:default;border-color:var(--accent);color:var(--accent)}
+.match{display:grid;gap:10px}
+.match-row{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:10px;align-items:center;border-bottom:1px solid var(--line);padding-bottom:10px}
+.match-row.ok select{border-color:var(--ok)} .match-row.no select{border-color:var(--bad)}
+@media (max-width:620px){.match-row{grid-template-columns:1fr}}
+.score{font:700 1.1rem var(--f-display)}
+
+/* Evaluación */
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;align-items:start}
+.form{display:grid;gap:12px}
+.form label{display:grid;gap:4px;font-size:.9rem;font-weight:500}
+.check{display:flex !important;grid-template-columns:none;gap:10px;align-items:flex-start;font-weight:400 !important}
+.check input{margin-top:5px}
+.rules{margin:0;padding-left:20px;display:grid;gap:4px;color:var(--muted);font-size:.93rem}
+.rubric{width:100%;border-collapse:collapse;font-size:.88rem;min-width:720px}
+.rubric th,.rubric td{border:1px solid var(--line);padding:9px 10px;vertical-align:top;text-align:left}
+.rubric th{background:var(--bg);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
+.rubric td:first-child{font-weight:600;width:20%}
+.tasks{display:grid;gap:12px;counter-reset:t}
+.task{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:8px}
+.task ul{margin:0;padding-left:20px;color:var(--ink)}
+.task .meta{font-size:.85rem;color:var(--muted)}
+details.teacher{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+details.teacher summary{cursor:pointer;font-weight:600}
+details.teacher[open]{display:grid;gap:12px}
+
+/* Examen a pantalla completa */
+#exam{position:fixed;inset:0;z-index:100;background:var(--bg);overflow-y:auto;padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+#exam.locked{user-select:none;-webkit-user-select:none}
+.exam-in{max-width:760px;margin:0 auto;display:grid;gap:18px}
+.exam-bar{display:flex;flex-wrap:wrap;gap:10px 18px;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:12px}
+.clock{font:700 1.4rem var(--f-mono);font-variant-numeric:tabular-nums}
+.clock.low{color:var(--bad)}
+.pill{font:600 .78rem var(--f-body);padding:4px 10px;border-radius:999px;border:1px solid var(--line)}
+.pill.warn{border-color:var(--bad);color:var(--bad)}
+.progress{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.progress div{height:100%;background:var(--accent);transition:width .3s}
+.qcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;display:grid;gap:16px}
+.qcard .stem{font-size:1.1rem;font-weight:500}
+.result{display:grid;gap:14px}
+.grade{font:700 3.4rem/1 var(--f-display);font-variant-numeric:tabular-nums}
+.msg{white-space:pre-wrap;font:400 .82rem/1.5 var(--f-mono);background:var(--code);border:1px solid var(--line);border-radius:var(--r);padding:12px;max-height:280px;overflow:auto}
+.ctx{display:grid;gap:4px;background:var(--soft);border:1px solid var(--accent);border-radius:var(--r);padding:12px 14px}
+code.big{font-size:1.1rem;background:none;padding:0;overflow-wrap:anywhere}
+.mono-wrap{font-family:var(--f-mono);font-size:.88rem;overflow-wrap:anywhere;min-width:0}
+.fbq.good{border-left:4px solid var(--ok)} .fbq.bad{border-left:4px solid var(--bad)}
+.tagr{font:600 .75rem var(--f-body);padding:2px 8px;border-radius:999px;color:#fff}
+.tagr.good{background:var(--ok)} .tagr.bad{background:var(--bad)}
+.gstart .chip{cursor:default}
+.pipe span.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.pipe span:not(.on){opacity:.7}
+.ctx{display:grid;gap:8px;background:var(--soft);border:1px solid var(--accent);border-radius:var(--r);padding:12px 14px;min-width:0}
+.ctx .diagram,.ctx .scroll{background:var(--surface)}
+code.big{font-size:1.1rem;background:none;padding:0;overflow-wrap:anywhere}
+.mono-wrap{font-family:var(--f-mono);font-size:.88rem;overflow-wrap:anywhere;min-width:0}
+.fbq.good{border-left:4px solid var(--ok)} .fbq.bad{border-left:4px solid var(--bad)}
+.tagr{font:600 .75rem var(--f-body);padding:2px 8px;border-radius:999px;color:#fff}
+.tagr.good{background:var(--ok)} .tagr.bad{background:var(--bad)}
+.gstart .chip{cursor:default}
+svg .st{fill:var(--surface);stroke:var(--ink);stroke-width:1.5}
+svg .st.er{stroke:var(--bad);stroke-dasharray:4 3}
+svg .st.act{fill:var(--accent);stroke:var(--accent)}
+svg .st2{fill:none;stroke:var(--ink);stroke-width:1.3}
+svg .st2.act{stroke:var(--accent-ink)}
+svg .stx{fill:var(--ink);font:600 13px var(--f-mono)}
+svg .stx.act{fill:var(--accent-ink)}
+svg .edge{stroke:var(--muted);stroke-width:1.4;fill:none}
+svg .edge.act{stroke:var(--accent);stroke-width:2.6}
+svg .elbl{fill:var(--ink);font:600 12px var(--f-mono);paint-order:stroke;stroke:var(--surface);stroke-width:4px;stroke-linejoin:round}
+svg .elbl.act{fill:var(--accent)}
+.dfat{min-width:240px}
+.dfat td,.dfat th{text-align:center}
+.dfat th{text-transform:none;letter-spacing:0;font-family:var(--f-mono);font-size:.82rem;color:var(--ink)}
+.tape .cell.sp{color:var(--muted)}
+#trFor{white-space:pre-wrap;overflow-wrap:anywhere}
+.dfat tbody th{text-align:left;font-family:var(--f-mono)}
+.dfat tr.cur-row{background:var(--soft)}
+.dfat td.hit{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.dfat select{padding:5px 6px;font:400 .85rem var(--f-mono);width:auto;min-width:64px}
+.tape{display:flex;flex-wrap:wrap;gap:3px;font-family:var(--f-mono);min-width:0}
+.tape .cell{min-width:26px;padding:5px 6px;text-align:center;border:1px solid var(--line);border-radius:5px;background:var(--bg);font-size:.88rem}
+.tape .cell.past{color:var(--muted)}
+.tape .cell.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+@media (prefers-reduced-motion:reduce)
+{*{transition:none !important;animation:none !important}}
+</style>
+<header class="top">
+  <div class="wrap">
+    <div class="eyebrow">Ingeniería de Sistemas · Compiladores · Unidad 2</div>
+    <div class="course"><h1>Sesión 2 · <span>Análisis léxico y autómatas finitos</span></h1></div>
+    <p class="lead">Funciones del analizador léxico, componentes léxicos, patrones y lexemas, y máquinas de estado finito (MEF): diagramas, tablas de transiciones y su uso para separar tokens. Bloque de 3 horas.</p>
+    <div class="pipe" aria-label="Fases del compilador; esta sesión trata el análisis léxico">
+      <span>fuente</span><i>→</i><span class="a on">léxico</span><i>→</i><span>sintáctico</span><i>→</i><span>semántico</span><i>→</i><span>intermedio</span><i>→</i><span>optimización</span><i>→</i><span>generación</span><i>→</i><span>objeto</span>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs" aria-label="Secciones de la clase">
+  <div class="wrap" role="tablist">
+    <button role="tab" id="t-ruta" aria-controls="ruta" aria-selected="true">Ruta de clase</button>
+    <button role="tab" id="t-teoria" aria-controls="teoria" aria-selected="false">Teoría</button>
+    <button role="tab" id="t-practica" aria-controls="practica" aria-selected="false">Práctica</button>
+    <button role="tab" id="t-actividades" aria-controls="actividades" aria-selected="false">Actividades</button>
+    <button role="tab" id="t-evaluacion" aria-controls="evaluacion" aria-selected="false">Evaluación</button>
+  </div>
+</nav>
+
+<main><div class="wrap">
+
+<!-- ================= RUTA ================= -->
+<section class="panel" id="ruta" role="tabpanel" aria-labelledby="t-ruta">
+  <div class="block">
+    <h2>Ruta de 180 minutos</h2>
+    <div class="bar" aria-hidden="true">
+      <div style="width:8.33%;background:var(--token)"></div>
+      <div style="width:22.2%;background:var(--accent)"></div>
+      <div style="width:5.56%;background:var(--line)"></div>
+      <div style="width:19.4%;background:var(--accent);opacity:.7"></div>
+      <div style="width:8.33%;background:var(--token);opacity:.7"></div>
+      <div style="width:11.1%;background:var(--ok)"></div>
+      <div style="width:11.1%;background:var(--token);opacity:.7"></div>
+      <div style="width:8.33%;background:var(--bad)"></div>
+      <div style="width:5.56%;background:var(--muted)"></div>
+    </div>
+    <div class="legend"><span><b style="background:var(--token)"></b>Activación 15</span><span><b style="background:var(--accent)"></b>Teoría 75</span><span><b style="background:var(--line)"></b>Pausa 10</span><span><b style="background:var(--token);opacity:.7"></b>Actividades en clase 35</span><span><b style="background:var(--ok)"></b>Práctica 20</span><span><b style="background:var(--bad)"></b>Evaluación 15</span><span><b style="background:var(--muted)"></b>Cierre 10</span></div>
+  </div>
+
+  <div class="agenda">
+    <div class="slot"><div class="t">0:00–0:15</div><div><h3>Activación: ¿cómo separarías esta línea en palabras?</h3><p>Se proyecta <code>if(total>=100)descuento=total*0.1;</code> sin espacios y cada pareja marca dónde termina cada componente. Luego la prueba inicial del módulo (5 preguntas aleatorias, sin nota).</p><a class="go" href="#practica" data-go="practica" data-target="diag">Ir a la prueba inicial</a></div></div>
+    <div class="slot"><div class="t">0:15–0:55</div><div><h3>Teoría I: el analizador léxico</h3><p>Función principal y secundarias, razones para separarlo del sintáctico, componentes léxicos, patrones y lexemas.</p><a class="go" href="#teoria" data-go="teoria" data-target="funciones">Abrir teoría</a></div></div>
+    <div class="slot pause"><div class="t">0:55–1:05</div><div><h3>Pausa</h3><p>10 minutos.</p></div></div>
+    <div class="slot"><div class="t">1:05–1:40</div><div><h3>Teoría II: máquinas de estado finito</h3><p>Definición, diagrama y tabla de transiciones. Ejemplos del módulo ejecutados en el simulador: unos impares, ceros pares y unos impares, lista de variables de FORTRAN. De la tabla al programa.</p><a class="go" href="#teoria" data-go="teoria" data-target="mef">Ver MEF</a></div></div>
+    <div class="slot"><div class="t">1:40–1:55</div><div><h3>Actividad en clase 1: la MEF humana</h3><p>Por grupos, los estudiantes son los estados y se pasan el marcador según el símbolo que se lee.</p><a class="go" href="#actividades" data-go="actividades">Ver la actividad</a></div></div>
+    <div class="slot"><div class="t">1:55–2:15</div><div><h3>Práctica calificada</h3><p>10 preguntas aleatorias en 15 minutos, con clave del día. Antes, 5 minutos libres en el laboratorio de tablas.</p><a class="go" href="#practica" data-go="practica" data-target="lab">Ir al laboratorio</a></div></div>
+    <div class="slot"><div class="t">2:15–2:35</div><div><h3>Actividad en clase 2: ejecuta tu MEF</h3><p>Calificada. Cada estudiante recibe una MEF distinta y la ejecuta a mano sobre varias cadenas.</p><a class="go" href="#actividades" data-go="actividades">Ir a las actividades</a></div></div>
+    <div class="slot"><div class="t">2:35–2:50</div><div><h3>Evaluación individual</h3><p>12 preguntas al azar de un banco de 24, 15 minutos, con clave del día. Nota de 1,0 a 5,0 enviada por WhatsApp.</p><a class="go" href="#evaluacion" data-go="evaluacion">Ir a la evaluación</a></div></div>
+    <div class="slot"><div class="t">2:50–3:00</div><div><h3>Cierre y actividades en casa</h3><p>Cada estudiante dice un patrón, un lexema y una MEF que recuerde. Se presentan el reto en línea, el taller de MEF y el avance de la primera práctica.</p><a class="go" href="#actividades" data-go="actividades" data-target="casa">Ver actividades en casa</a></div></div>
+  </div>
+
+  <div class="block">
+    <h2>Al terminar la sesión, el estudiante podrá</h2>
+    <div class="outcomes">
+      <div class="outcome"><span class="eyebrow">Comprender</span><p>Explicar las funciones del analizador léxico y distinguir componente léxico, patrón y lexema.</p></div>
+      <div class="outcome"><span class="eyebrow">Aplicar</span><p>Ejecutar una MEF sobre una cadena usando su diagrama o su tabla de transiciones y decidir si la acepta.</p></div>
+      <div class="outcome"><span class="eyebrow">Crear</span><p>Construir el diagrama y la tabla de una MEF que reconozca un conjunto de secuencias dado.</p></div>
+    </div>
+  </div>
+
+  <div class="callout"><b>Material base:</b> Módulo «Compiladores», Corporación Universitaria Remington (Zapata, 2015), capítulo 4: análisis léxico, págs. 18–27 y ejercicios 4.2. Los estados equivalentes, las MEF no determinísticas y las expresiones regulares se trabajan en la sesión 3.</div>
+</section>
+
+<!-- ================= TEORÍA ================= -->
+<section class="panel" id="teoria" role="tabpanel" aria-labelledby="t-teoria" hidden>
+  <nav class="toc" aria-label="Temas">
+    <a href="#funciones" data-target="funciones">1. Funciones del léxico</a>
+    <a href="#lexemas" data-target="lexemas">2. Tokens, patrones y lexemas</a>
+    <a href="#mef" data-target="mef">3. Máquinas de estado finito</a>
+    <a href="#ejemplos" data-target="ejemplos">4. Ejemplos del módulo</a>
+    <a href="#fortran" data-target="fortran">5. Lista de variables FORTRAN</a>
+    <a href="#programa" data-target="programa">6. De la MEF al programa</a>
+    <a href="#glosario" data-target="glosario">7. Glosario</a>
+  </nav>
+
+  <article class="block" id="funciones">
+    <span class="eyebrow">Tema 1</span>
+    <h2>¿Qué hace el analizador léxico?</h2>
+    <div class="prose">
+      <p>Es la primera fase del análisis. Su función principal es obtener los <b>componentes léxicos</b> del lenguaje, llamados <b>tokens</b>, que después usa el analizador sintáctico para revisar las líneas completas del programa.</p>
+      <p>El sintáctico no lee el archivo fuente. Cada vez que necesita un componente se lo pide al léxico; el léxico lee caracteres hasta completar uno, registra los identificadores en la tabla de símbolos y entrega el token.</p>
+    </div>
+    <div class="diagram" aria-label="El analizador sintáctico pide tokens al léxico, que lee el programa fuente y consulta la tabla de símbolos">
+      <svg viewBox="0 0 640 210" width="640" role="img">
+        <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>
+        <rect class="box" x="10" y="60" width="130" height="56" rx="10"/><text class="lbl" x="75" y="84" text-anchor="middle">Programa</text><text class="lbl" x="75" y="102" text-anchor="middle">fuente</text>
+        <rect class="box a" x="230" y="60" width="150" height="56" rx="10"/><text class="lbl" x="305" y="84" text-anchor="middle">Analizador</text><text class="lbl" x="305" y="102" text-anchor="middle">léxico</text>
+        <rect class="box" x="480" y="60" width="150" height="56" rx="10"/><text class="lbl" x="555" y="84" text-anchor="middle">Analizador</text><text class="lbl" x="555" y="102" text-anchor="middle">sintáctico</text>
+        <rect class="box side" x="230" y="160" width="150" height="40" rx="10"/><text class="lbl" x="305" y="185" text-anchor="middle">Tabla de símbolos</text>
+        <path class="arr" d="M140,88 H226" marker-end="url(#ah2)"/><text class="lbl2" x="183" y="80" text-anchor="middle">caracteres</text>
+        <path class="arr" d="M380,78 H476" marker-end="url(#ah2)"/><text class="lbl2" x="428" y="70" text-anchor="middle">token</text>
+        <path class="arr" d="M480,100 H384" marker-end="url(#ah2)"/><text class="lbl2" x="432" y="118" text-anchor="middle">«dame el siguiente»</text>
+        <path class="arr" d="M305,116 V156" marker-start="url(#ah2)" marker-end="url(#ah2)"/>
+      </svg>
+    </div>
+    <div class="two">
+      <div class="prose">
+        <h3>Funciones secundarias</h3>
+        <ul class="notes">
+          <li>Eliminar del fuente los comentarios y los espacios en blanco (blancos, tabuladores y saltos de línea).</li>
+          <li>Relacionar los mensajes de error con el programa fuente (línea y columna).</li>
+          <li>En algunos compiladores, hacer una copia del fuente con los errores marcados.</li>
+          <li>Aplicar el procesamiento de macros, si el lenguaje lo tiene.</li>
+        </ul>
+      </div>
+      <div class="prose">
+        <h3>¿Por qué separarlo del sintáctico?</h3>
+        <ul class="notes">
+          <li><b>Diseño sencillo:</b> el sintáctico ya no se ocupa de blancos ni comentarios.</li>
+          <li><b>Eficiencia:</b> la teoría de autómatas permite separar los tokens con rapidez y precisión.</li>
+          <li><b>Transportabilidad:</b> los símbolos analizados pueden ser comunes a distintos lenguajes.</li>
+        </ul>
+      </div>
+    </div>
+  </article>
+
+  <article class="block" id="lexemas">
+    <span class="eyebrow">Tema 1</span>
+    <h2>Componentes léxicos, patrones y lexemas</h2>
+    <div class="prose">
+      <p>Un <b>componente léxico</b> (token) es una categoría con sentido para el lenguaje: identificador, número, operador relacional. El <b>patrón</b> es la regla que dice qué cadenas pertenecen a esa categoría; de forma precisa, es una expresión regular. El <b>lexema</b> es la cadena concreta del programa que cumple el patrón.</p>
+    </div>
+    <div class="scroll">
+      <table class="compare">
+        <thead><tr><th>Componente léxico</th><th>Lexemas de ejemplo</th><th>Descripción informal del patrón</th></tr></thead>
+        <tbody>
+          <tr><td><code>const</code></td><td><code>const</code></td><td>La palabra const</td></tr>
+          <tr><td><code>if</code></td><td><code>if</code></td><td>La palabra if</td></tr>
+          <tr><td><code>relación</code></td><td><code>&lt;</code> <code>&lt;=</code> <code>=</code> <code>&lt;&gt;</code> <code>&gt;</code> <code>&gt;=</code></td><td>&lt; o &lt;= o = o &lt;&gt; o &gt; o &gt;=</td></tr>
+          <tr><td><code>id</code></td><td><code>pi</code> <code>cuenta</code> <code>d2</code></td><td>Letra seguida de letras y dígitos</td></tr>
+          <tr><td><code>num</code></td><td><code>3.1416</code> <code>0</code> <code>6.02E23</code></td><td>Cualquier constante numérica</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose"><p>En la mayoría de los lenguajes son componentes léxicos las palabras clave, los operadores, los identificadores, las constantes, las cadenas literales y los signos de puntuación (paréntesis, coma y punto y coma). Así se descompone una línea de C:</p></div>
+    <pre class="code">if (velocidad >= 60) total = total + 1;   /* multa */</pre>
+    <div class="toks" id="lexDemo"></div>
+    <p class="muted" style="max-width:70ch">El comentario y los espacios no producen tokens. <code>total</code> aparece dos veces como lexema, pero en la tabla de símbolos queda una sola entrada.</p>
+  </article>
+
+  <article class="block" id="mef">
+    <span class="eyebrow">Tema 2</span>
+    <h2>Máquinas de estado finito (MEF)</h2>
+    <div class="prose">
+      <p>Una MEF, o autómata finito, es un modelo matemático que se puede simular como programa. Se usa en el análisis léxico porque resuelve la mayoría de sus problemas, consume una cantidad fija de memoria, es muy eficiente y tiene una teoría matemática que la sustenta.</p>
+    </div>
+    <div class="outcomes">
+      <div class="outcome"><span class="eyebrow">Σ</span><p>Un conjunto finito de <b>símbolos de entrada</b>.</p></div>
+      <div class="outcome"><span class="eyebrow">Q</span><p>Un conjunto finito de <b>estados</b>.</p></div>
+      <div class="outcome"><span class="eyebrow">q₀</span><p>Uno o más <b>estados iniciales</b>.</p></div>
+      <div class="outcome"><span class="eyebrow">A</span><p>Uno o más <b>estados de aceptación</b>.</p></div>
+      <div class="outcome"><span class="eyebrow">δ</span><p>Un conjunto de <b>transiciones</b>: δ(estado actual, símbolo) = nuevo estado.</p></div>
+    </div>
+    <div class="prose">
+      <p>La máquina empieza en el estado inicial, lee la cadena de izquierda a derecha y en cada símbolo cambia de estado según δ. Al terminar la cadena, la <b>acepta</b> si quedó en un estado de aceptación y la <b>rechaza</b> en otro caso. Si una transición no está definida, la máquina pasa a <b>err</b>, un estado del que no se sale.</p>
+      <p>Hay dos representaciones equivalentes. En el <b>diagrama de estados</b>, los estados van en círculos, las transiciones son flechas con el símbolo y los estados de aceptación llevan doble círculo. En la <b>tabla de transiciones</b>, una matriz de M filas (estados) por N columnas (símbolos), la primera fila siempre es el estado inicial y una columna adicional marca con 1 los estados de aceptación.</p>
+    </div>
+  </article>
+
+  <article class="block" id="ejemplos">
+    <span class="eyebrow">Tema 2</span>
+    <h2>Ejemplos del módulo</h2>
+    <div class="prose"><p><b>Ejemplo 1.</b> Secuencias de unos y ceros con número de unos impar. Σ = {0, 1}. S0: número de unos par (inicial). S1: número de unos impar (aceptación). Un 0 no cambia la paridad; un 1 la invierte.</p></div>
+    <div class="trace">
+      <div class="diagram" id="dEj1"></div>
+      <div class="scroll" id="tEj1"></div>
+    </div>
+    <div class="callout warn"><b>Corrección al módulo:</b> el módulo da <code>00010</code> como cadena no válida, pero tiene un solo 1, que es cantidad impar: la máquina termina en S1 y la acepta. Una cadena no válida sería <code>00110</code>. Compruébalo en el simulador.</div>
+
+    <div class="prose"><p><b>Ejemplo 2.</b> Número de unos impar y número de ceros par. Hay que recordar dos paridades a la vez, así que se necesitan 2 × 2 = 4 estados: CPUP (ceros pares, unos pares; inicial), CPUI (ceros pares, unos impares; aceptación), CIUP (ceros impares, unos pares) y CIUI (ceros impares, unos impares). Un 0 cambia la letra de los ceros y un 1 la de los unos.</p></div>
+    <div class="trace">
+      <div class="diagram" id="dEj2"></div>
+      <div class="scroll" id="tEj2"></div>
+    </div>
+    <div class="callout">En el módulo, CIUI aparece descrito como «ceros impares unos pares»; es <b>ceros impares, unos impares</b>.</div>
+
+    <div class="prose"><p><b>Ejercicio 1.</b> Secuencias de a y b con número de b par. X0: número de b par (inicial y de aceptación, porque cero es par). X1: número de b impar. La cadena vacía (la <b>sentencia nula</b>, ausencia de símbolos) se acepta.</p></div>
+    <div class="trace">
+      <div class="diagram" id="dEj3"></div>
+      <div class="scroll" id="tEj3"></div>
+    </div>
+  </article>
+
+  <article class="block" id="fortran">
+    <span class="eyebrow">Tema 2</span>
+    <h2>Ejercicio 2: lista de variables en FORTRAN</h2>
+    <div class="prose">
+      <p>Aquí los símbolos de entrada ya no son caracteres sino componentes: Σ = {variable, constante, «,», «(», «)»}. Una lista válida es <code>a, b, v(10), mat(5, n, 3), h</code>. Estados: 0 inicial, 1 entró variable, 2 entró coma fuera de paréntesis, 3 entró «(», 4 entró constante, 5 entró «)», 6 entró coma dentro de paréntesis, 7 entró variable dentro de paréntesis. Aceptan 1 y 5. Las transiciones que no aparecen van a err.</p>
+    </div>
+    <div class="diagram" id="dFor"></div>
+    <div class="scroll" id="tFor"></div>
+    <div class="prose"><p>Recorrido de la lista de ejemplo:</p></div>
+    <pre class="code" id="trFor"></pre>
+    <div class="callout">Los estados 0 y 2, 3 y 6, y 4 y 7 tienen filas iguales: son <b>estados equivalentes</b> y la máquina se puede simplificar. Ese es el tema de la sesión 3.</div>
+  </article>
+
+  <article class="block" id="programa">
+    <span class="eyebrow">Tema 3</span>
+    <h2>De la MEF al programa</h2>
+    <div class="prose">
+      <p>El módulo propone dibujar primero el diagrama de los componentes léxicos y luego traducirlo a mano a un programa. La traducción más directa guarda la tabla de transiciones en una matriz y recorre la línea carácter por carácter:</p>
+    </div>
+    <pre class="code">int estado = 0;                         /* fila del estado inicial      */
+for (int i = 0; i &lt; strlen(linea); i++) {
+    int s = clase(linea[i]);            /* letra, dígito, punto…        */
+    estado = tabla[estado][s];          /* δ(estado, símbolo)           */
+    if (estado == ERR) { reportarError(i); break; }
+}
+if (aceptacion[estado]) puts("Cadena aceptada");
+else                    puts("Cadena rechazada");</pre>
+    <div class="prose"><p>Un escáner real combina varias MEF: la de identificadores (<code>letra (letra | dígito)*</code>) y la de constantes (<code>dígito+</code> con parte decimal opcional). Cuando la máquina ya no puede avanzar con el siguiente carácter, se cierra el lexema, se emite el token y se vuelve al estado inicial. Las dos MEF están en el simulador, y el escáner de la pestaña Práctica las aplica a una línea completa, que es justo lo que pide la primera práctica del módulo.</p></div>
+    <div class="trace">
+      <div class="diagram" id="dId"></div>
+      <div class="diagram" id="dNum"></div>
+    </div>
+  </article>
+
+  <article class="block" id="glosario">
+    <span class="eyebrow">Repaso</span>
+    <h2>Glosario de la sesión</h2>
+    <dl class="gloss">
+      <div><dt>Token</dt><dd>Componente léxico: categoría con sentido para el lenguaje (id, num, relación, palabra clave).</dd></div>
+      <div><dt>Patrón</dt><dd>Regla, normalmente una expresión regular, que describe las cadenas de un token.</dd></div>
+      <div><dt>Lexema</dt><dd>Cadena concreta del fuente que concuerda con un patrón.</dd></div>
+      <div><dt>MEF</dt><dd>Máquina de estado finito: símbolos, estados, estado inicial, estados de aceptación y transiciones.</dd></div>
+      <div><dt>Transición</dt><dd>Función que da el nuevo estado a partir del estado actual y el símbolo leído.</dd></div>
+      <div><dt>Tabla de transiciones</dt><dd>Matriz de estados (filas) por símbolos (columnas); la primera fila es el estado inicial.</dd></div>
+      <div><dt>Estado de error</dt><dd>Estado sin salida al que van las transiciones no definidas.</dd></div>
+      <div><dt>Sentencia nula</dt><dd>Ausencia de símbolos de entrada (la cadena vacía, ε).</dd></div>
+    </dl>
+  </article>
+</section>
+
+<!-- ================= PRÁCTICA ================= -->
+<section class="panel" id="practica" role="tabpanel" aria-labelledby="t-practica" hidden>
+
+  <div class="lab" id="diag">
+    <div class="lab-head"><div><span class="eyebrow">Activación · diagnóstica, sin nota</span><h2>Prueba inicial del módulo</h2></div><span class="score" id="diagScore"></span></div>
+    <p class="muted">Las preguntas y las opciones salen en orden aleatorio. Responde todas y pulsa «Revisar» para ver la retroalimentación.</p>
+    <div class="qlist" id="diagList"></div>
+    <div class="row"><button class="btn" id="diagCheck" type="button">Revisar</button><button class="btn ghost" id="diagNew" type="button">Barajar de nuevo</button></div>
+  </div>
+
+  <div class="lab" id="sim">
+    <div class="lab-head"><div><span class="eyebrow">Exploración libre · sin nota</span><h2>Simulador de MEF</h2></div></div>
+    <p class="muted">Elige una máquina del módulo, escribe una cadena y avanza símbolo por símbolo. Observa el estado activo en el diagrama y la fila activa en la tabla.</p>
+    <div class="row">
+      <label for="simM" class="eyebrow" style="width:100%">Máquina</label>
+      <select id="simM" style="flex:1 1 280px"></select>
+    </div>
+    <p class="muted" id="simDesc" style="font-size:.92rem"></p>
+    <div class="row">
+      <label for="simIn" class="eyebrow" style="width:100%">Cadena de entrada</label>
+      <input type="text" id="simIn" spellcheck="false" style="font-family:var(--f-mono);flex:1 1 220px">
+      <button class="btn" id="simLoad" type="button">Cargar</button>
+    </div>
+    <div class="chips" id="simEx"></div>
+    <div class="trace">
+      <div class="diagram" id="simD"></div>
+      <div class="stage">
+        <div class="tape" id="simTape"></div>
+        <div class="scroll" id="simT"></div>
+        <div id="simV" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="row"><button class="btn ghost" id="simReset" type="button">Reiniciar</button><button class="btn" id="simStep" type="button">Leer un símbolo →</button><button class="btn ghost" id="simRun" type="button">Leer toda la cadena</button></div>
+  </div>
+
+  <div class="lab" id="lab">
+    <div class="lab-head"><div><span class="eyebrow">Laboratorio · sin nota · parejas</span><h2>Construye la tabla</h2></div><span class="score" id="labScore"></span></div>
+    <p class="muted">Elige un problema, decide cuántos estados necesitas, marca los de aceptación y llena cada celda. La fila q0 es el estado inicial. «Probar mi MEF» compara tu máquina con la respuesta correcta en todas las cadenas de hasta 9 símbolos y te muestra la primera en la que difieren.</p>
+    <div class="row">
+      <label for="labP" class="eyebrow" style="width:100%">Problema</label>
+      <select id="labP" style="flex:1 1 320px"></select>
+      <label for="labN" class="eyebrow">Estados</label>
+      <select id="labN" style="width:auto"><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    </div>
+    <p id="labDesc" class="muted" style="font-size:.92rem"></p>
+    <div class="trace">
+      <div class="scroll" id="labT"></div>
+      <div class="diagram" id="labD"></div>
+    </div>
+    <div class="row"><button class="btn" id="labTest" type="button">Probar mi MEF</button><button class="btn ghost" id="labClear" type="button">Vaciar la tabla</button></div>
+    <div id="labOut" aria-live="polite"></div>
+  </div>
+
+  <div class="lab" id="scan">
+    <div class="lab-head"><div><span class="eyebrow">Exploración libre · base de la primera práctica</span><h2>Escáner carácter por carácter</h2></div></div>
+    <p class="muted">Escribe una instrucción de C. El escáner recorre la línea carácter por carácter con las MEF de identificadores y constantes, separa los tokens y revisa si los signos de agrupación están bien apareados.</p>
+    <div class="chips" id="scanEx"></div>
+    <div class="row">
+      <label for="scanIn" class="eyebrow" style="width:100%">Instrucción</label>
+      <input type="text" id="scanIn" spellcheck="false" style="font-family:var(--f-mono);flex:1 1 280px">
+      <button class="btn" id="scanLoad" type="button">Cargar</button>
+    </div>
+    <div class="tape" id="scanTape"></div>
+    <div class="row" style="font-size:.92rem"><span class="pill" id="scanState">Estado: q0</span><span class="muted" id="scanMsg"></span></div>
+    <div class="row"><button class="btn ghost" id="scanReset" type="button">Reiniciar</button><button class="btn" id="scanStep" type="button">Leer un carácter →</button><button class="btn ghost" id="scanRun" type="button">Analizar toda la línea</button></div>
+    <div class="toks" id="scanToks"></div>
+    <div id="scanOut"></div>
+  </div>
+
+  <div class="gstart" data-comp="practica"></div>
+</section>
+
+<!-- ================= ACTIVIDADES ================= -->
+<section class="panel" id="actividades" role="tabpanel" aria-labelledby="t-actividades" hidden>
+  <div class="block">
+    <span class="eyebrow">Actividades en clase</span>
+    <h2>En el aula</h2>
+  </div>
+
+  <div class="lab">
+    <div class="lab-head"><div><span class="eyebrow">Actividad en clase 1 · 15 min · grupos · sin plataforma</span><h2>La MEF humana</h2></div></div>
+    <div class="prose">
+      <p>Cada grupo se convierte en una máquina de estado finito. Cada integrante es un estado y tiene una tarjeta con sus transiciones («si leen 0, paso el marcador a…; si leen 1, a…»). Los estados de aceptación llevan la tarjeta en rojo. Un lector, fuera de la máquina, lee la cadena símbolo por símbolo en voz alta.</p>
+    </div>
+    <div class="scroll">
+      <table class="compare">
+        <thead><tr><th>Ronda</th><th>Máquina</th><th>Integrantes</th><th>Cadenas que lee el docente</th></tr></thead>
+        <tbody>
+          <tr><td><b>1</b></td><td>Número de unos impar</td><td>2 estados y 1 lector</td><td><code>1101</code>, <code>00010</code>, <code>0110</code></td></tr>
+          <tr><td><b>2</b></td><td>Ceros pares y unos impares</td><td>4 estados y 1 lector</td><td><code>0110</code>, <code>001</code>, <code>10101</code></td></tr>
+          <tr><td><b>3</b></td><td>Lista de variables FORTRAN</td><td>9 estados (incluido err) y 1 lector</td><td><code>a, b(10)</code>, <code>mat(5, n, 3), h</code>, <code>a, (</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes">
+      <li>Quien tiene el marcador al terminar la cadena dice «acepto» o «rechazo». El grupo comprueba en el simulador.</li>
+      <li>En la ronda 3, los estudiantes que hacen de 0 y 2, de 3 y 6 y de 4 y 7 deben comparar sus tarjetas: ¿qué notan? Es la entrada a la sesión 3.</li>
+      <li>Valoración de participación, la registra el docente: el marcador siempre llega al estado correcto y el veredicto coincide con el simulador.</li>
+    </ul>
+  </div>
+
+  <div class="gstart" data-comp="clase"></div>
+
+  <div class="block" id="casa" style="margin-top:12px">
+    <span class="eyebrow">Actividades en casa · entrega antes de la sesión 3</span>
+    <h2>En casa</h2>
+  </div>
+
+  <div class="gstart" data-comp="casa"></div>
+
+  <div class="block">
+    <span class="eyebrow">Actividad en casa 2 · trabajo escrito · lo califica el docente con la rúbrica</span>
+    <h3>Taller 2: análisis léxico y máquinas de estado finito</h3>
+    <p class="muted" style="max-width:70ch">Basado en los «Ejercicios por temas» y el «Taller de análisis léxico» del capítulo 4 del módulo. Trabajo individual, entrega en PDF.</p>
+    <div class="tasks">
+      <div class="task"><h3>Punto 1 · Preguntas (15 %)</h3><ul><li>¿Por qué el analizador léxico elimina espacios en blanco y comentarios?</li><li>¿Qué hace diferente a un componente léxico agrupado en la tabla de símbolos?</li><li>¿Qué funciones de los lenguajes de programación debe usar el analizador léxico?</li><li>¿Por qué no se usa directamente el analizador semántico en lugar del léxico?</li></ul></div>
+      <div class="task"><h3>Punto 2 · Construcción de MEF (55 %)</h3><p>Para cada una: diagrama de estados, tabla de transiciones, 3 cadenas aceptadas y 3 rechazadas con su recorrido.</p><ul><li>Las palabras clave <code>while</code> y <code>for</code> del lenguaje C.</li><li>Las constantes positivas sin punto decimal.</li><li>Secuencias de a, b y c con número de a par, de b impar y de c par.</li><li>Secuencias de unos y ceros que empiezan por 1 y luego tienen cantidad par de ceros.</li><li>Trayectorias para subir del piso 1 al 5 por escaleras (de a un piso) o ascensor (de a dos pisos).</li><li>Las constantes decimales sin signo con punto decimal y exponente.</li></ul><p class="meta">Las máquinas de dos símbolos se pueden comprobar en el laboratorio «Construye la tabla». Si tu tabla no pasa la prueba, explica en el taller qué corregiste.</p></div>
+      <div class="task"><h3>Punto 3 · Avance de la primera práctica (30 %)</h3><p>La primera práctica del módulo (4.3.1) pide un programa que reciba una expresión aritmética de C con <code>+ - * /</code>, <code>( )</code> y <code>{ }</code> y, carácter por carácter, liste las variables, las constantes y los operadores, e informe si los signos de agrupación están bien apareados.</p><ul><li>Diseña las MEF que usará tu programa: identificadores, constantes enteras y reales, y operadores.</li><li>Escribe en pseudocódigo el ciclo que recorre la línea con la tabla de transiciones.</li><li>Prueba tu diseño con tres líneas en el escáner de la pestaña Práctica y anexa los resultados.</li></ul><p class="meta">El programa completo se entrega en la sesión 3.</p></div>
+    </div>
+    <div class="scroll">
+      <table class="rubric">
+        <thead><tr><th>Criterio</th><th>Excelente (4,6–5,0)</th><th>Bueno (3,6–4,5)</th><th>Básico (3,0–3,5)</th><th>Insuficiente (1,0–2,9)</th></tr></thead>
+        <tbody>
+          <tr><td>Respuestas conceptuales (P1)</td><td>Correctas, con ejemplos propios</td><td>Correctas con algún vacío</td><td>Copiadas del módulo</td><td>Incorrectas o ausentes</td></tr>
+          <tr><td>Diagramas y tablas (P2)</td><td>Las seis MEF correctas, con diagrama y tabla coherentes entre sí</td><td>Errores menores en una MEF</td><td>Faltan MEF o hay transiciones incorrectas</td><td>Ausentes o sin lógica</td></tr>
+          <tr><td>Recorridos y verificación (P2)</td><td>Recorridos correctos y verificados en el laboratorio</td><td>Recorridos correctos sin verificar</td><td>Recorridos incompletos</td><td>Sin recorridos</td></tr>
+          <tr><td>Diseño de la práctica (P3)</td><td>MEF completas, pseudocódigo claro y pruebas anexas</td><td>Diseño completo sin pruebas</td><td>Diseño parcial</td><td>Ausente</td></tr>
+          <tr><td>Presentación</td><td>Ordenada, diagramas legibles</td><td>Ordenada con detalles</td><td>Desordenada pero legible</td><td>Ilegible o fuera de plazo</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ================= EVALUACIÓN ================= -->
+<section class="panel" id="evaluacion" role="tabpanel" aria-labelledby="t-evaluacion" hidden>
+  <div class="two">
+    <div class="block">
+      <span class="eyebrow">Reglas para todas las actividades calificadas</span>
+      <h2>Cómo se califica y cómo se protege</h2>
+      <ul class="rules">
+        <li><b>Escala de 1,0 a 5,0.</b> Nota = 1 + 4 × (aciertos ÷ preguntas). Se aprueba con 3,0.</li>
+        <li><b>Un solo intento</b> por documento en cada actividad. El equipo además registra cuántos intentos se han iniciado en él.</li>
+        <li><b>Preguntas aleatorias:</b> cada estudiante recibe una selección y un orden distintos, con las opciones barajadas. En «Ejecuta tu MEF» y en el reto en casa cada estudiante recibe su propia máquina o su propia instrucción.</li>
+        <li>Las actividades del aula exigen la <b>clave del día</b> que el docente dicta en clase.</li>
+        <li>Pantalla completa que oculta el material, con marca de agua con tu nombre y documento.</li>
+        <li>Una pregunta a la vez; no se puede volver atrás. El reloj sigue corriendo aunque recargues.</li>
+        <li>Cada salida (cambiar de pestaña, de aplicación o de ventana, recargar o salir de pantalla completa) queda registrada. A la <b>3.ª salida</b> la actividad se entrega sola.</li>
+        <li>Copiar, pegar, seleccionar, clic derecho, imprimir y atajos de herramientas de desarrollo están bloqueados; los intentos y las capturas de pantalla quedan como incidentes.</li>
+        <li>Al terminar ves tu nota, el número de aciertos y la retroalimentación de cada pregunta, y envías el resultado por WhatsApp al <span class="mono">313 373 5510</span>. El mensaje lleva un código de verificación que detecta cualquier modificación.</li>
+      </ul>
+    </div>
+    <div class="gstart" data-comp="eval"></div>
+  </div>
+
+  <div class="lab" id="summary">
+    <div class="lab-head"><div><span class="eyebrow">Consolidado</span><h2>Mis calificaciones de la sesión 2</h2></div></div>
+    <div id="sumBody"></div>
+  </div>
+
+  <details class="teacher" id="teacher">
+    <summary>Zona docente</summary>
+    <div id="tLock" class="form" style="max-width:420px">
+      <label for="tPin">PIN docente<input type="password" id="tPin" autocomplete="off"></label>
+      <div class="row"><button class="btn" id="tPinBtn" type="button">Desbloquear</button></div>
+      <p class="fb badc" id="tPinErr" role="alert"></p>
+    </div>
+    <div id="tTools" hidden style="display:grid;gap:20px">
+      <div class="okbox"><span class="eyebrow">Clave del día · válida solo hoy</span><div class="grade" id="tKey" style="font-size:2.6rem;margin-top:6px"></div><p class="muted" style="font-size:.88rem">Es la misma clave en todas las sesiones del curso. Díctala al iniciar la práctica, la actividad en clase y la evaluación. La actividad en casa no la necesita.</p></div>
+      <div class="form">
+        <h3>Verificar mensajes</h3>
+        <p class="muted">Pega uno o varios mensajes recibidos por WhatsApp, de la sesión 1 o de la 2. La página recalcula cada código y te dice si es auténtico o fue alterado.</p>
+        <textarea id="verifyIn" spellcheck="false"></textarea>
+        <div class="row"><button class="btn" id="verifyBtn" type="button">Verificar</button></div>
+        <div id="verifyOut" aria-live="polite"></div>
+      </div>
+      <div class="form">
+        <h3>Habilitar un nuevo intento en este equipo</h3>
+        <p class="muted">Úsalo solo ante una falla técnica comprobada. Borra el intento de ese documento en esta actividad.</p>
+        <div class="row"><input type="text" id="tDoc" placeholder="Documento" style="flex:1 1 160px"><select id="tComp" style="flex:1 1 200px"></select><button class="btn ghost" id="tReset" type="button">Habilitar</button></div>
+        <div class="row"><button class="btn ghost" id="tIdReset" type="button">Liberar el registro del estudiante en este equipo</button></div>
+        <p class="fb" id="tResetFb"></p>
+      </div>
+    </div>
+  </details>
+</section>
+
+</div></main>
+
+<div id="exam" hidden></div>
+
+<script>
+/* ---------- Pestañas ---------- */
+const TABS=["ruta","teoria","practica","actividades","evaluacion"];
+function showTab(id,target){
+  if(!TABS.includes(id))id="ruta";
+  TABS.forEach(t=>{document.getElementById(t).hidden=t!==id;document.getElementById("t-"+t).setAttribute("aria-selected",t===id)});
+  try{localStorage.setItem("c2s2_tab",id)}catch(e){}
+  if(target){const el=document.getElementById(target);if(el)setTimeout(()=>el.scrollIntoView({behavior:"smooth",block:"start"}),30)}
+  else window.scrollTo({top:0});
+}
+TABS.forEach(t=>document.getElementById("t-"+t).addEventListener("click",()=>showTab(t)));
+document.querySelectorAll("[data-go]").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();showTab(a.dataset.go,a.dataset.target)}));
+document.querySelectorAll(".toc a").forEach(a=>a.addEventListener("click",e=>{e.preventDefault();document.getElementById(a.dataset.target).scrollIntoView({behavior:"smooth"})}));
+(function(){let h=(location.hash||"").slice(1),s=null;try{s=localStorage.getItem("c2s2_tab")}catch(e){}showTab(TABS.includes(h)?h:(s||"ruta"))})();
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+/* ---------- Motor de MEF ---------- */
+function step(M,s,a){if(s==="err")return"err";const r=M.delta[s];return(r&&r[a])||"err"}
+function runM(M,syms){const tr=[M.start];let s=M.start;for(const a of syms){s=step(M,s,a);tr.push(s)}return tr}
+function accepts(M,syms){const tr=runM(M,syms);return M.accept.includes(tr[tr.length-1])}
+const charSyms=alpha=>str=>{const out=[];for(const ch of str.replace(/\s+/g,"")){if(!alpha.includes(ch))return{err:`El símbolo «${ch}» no pertenece al alfabeto {${alpha.join(", ")}}.`};out.push(ch)}return{syms:out,shown:out}};
+
+const MACHINES={
+ impar:{name:"Número de unos impar (ejemplo 1)",desc:"Σ = {0, 1}. S0: unos pares (inicial). S1: unos impares (aceptación).",alpha:["0","1"],states:["S0","S1"],start:"S0",accept:["S1"],
+  delta:{S0:{"0":"S0","1":"S1"},S1:{"0":"S1","1":"S0"}},pos:{S0:[110,110,-90],S1:[330,110,-90]},w:440,h:190,ex:["1101","00010","00110","1",""],read:charSyms(["0","1"])},
+ cpui:{name:"Unos impares y ceros pares (ejemplo 2)",desc:"Σ = {0, 1}. CPUP inicial; CPUI de aceptación. Un 0 cambia la paridad de los ceros y un 1 la de los unos.",alpha:["0","1"],states:["CPUP","CPUI","CIUP","CIUI"],start:"CPUP",accept:["CPUI"],
+  delta:{CPUP:{"0":"CIUP","1":"CPUI"},CPUI:{"0":"CIUI","1":"CPUP"},CIUP:{"0":"CPUP","1":"CIUI"},CIUI:{"0":"CPUI","1":"CIUP"}},pos:{CPUP:[110,80],CPUI:[350,80],CIUP:[110,260],CIUI:[350,260]},w:460,h:340,ex:["1","001","0110","10101","100"],read:charSyms(["0","1"])},
+ bpar:{name:"Número de b par (ejercicio 1)",desc:"Σ = {a, b}. X0: b par (inicial y aceptación). X1: b impar.",alpha:["a","b"],states:["X0","X1"],start:"X0",accept:["X0"],
+  delta:{X0:{a:"X0",b:"X1"},X1:{a:"X1",b:"X0"}},pos:{X0:[110,110,-90],X1:[330,110,-90]},w:440,h:190,ex:["abba","bab","aaa",""],read:charSyms(["a","b"])},
+ fortran:{name:"Lista de variables FORTRAN (ejercicio 2)",desc:"Escribe una lista como a, b, v(10), mat(5, n, 3), h. Los nombres se leen como «var», los números como «cte». Aceptan 1 y 5.",alpha:["var","cte",",","(",")"],states:["0","1","2","3","4","5","6","7"],start:"0",accept:["1","5"],
+  delta:{"0":{var:"1"},"1":{",":"2","(":"3"},"2":{var:"1"},"3":{var:"7",cte:"4"},"4":{",":"6",")":"5"},"5":{",":"2"},"6":{var:"7",cte:"4"},"7":{",":"6",")":"5"}},
+  pos:{"0":[50,210],"1":[160,210,90],"2":[160,70],"3":[290,210],"4":[410,140],"7":[410,300],"6":[540,220],"5":[570,60]},w:620,h:350,ex:["a, b, v(10), mat(5, n, 3), h","a, b(10)","a, (","x(1, 2"],
+  read:str=>{const out=[],shown=[];const re=/\s*([A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[,()])\s*/y;let m,i=0;re.lastIndex=0;const s=str.trim();
+   while(i<s.length){re.lastIndex=i;m=re.exec(s);if(!m)return{err:`No se reconoce el carácter «${s[i]}»: usa nombres, números, comas y paréntesis.`};const t=m[1];out.push(/^[A-Za-z_]/.test(t)?"var":/^\d/.test(t)?"cte":t);shown.push(t);i=re.lastIndex}return{syms:out,shown}}},
+ ident:{name:"Identificadores: letra (letra | dígito)*",desc:"Σ = {letra, dígito}. q0 inicial; q1 aceptación. Empezar por dígito lleva a err.",alpha:["letra","dígito"],states:["q0","q1","err"],start:"q0",accept:["q1"],
+  delta:{q0:{"letra":"q1","dígito":"err"},q1:{"letra":"q1","dígito":"q1"},err:{"letra":"err","dígito":"err"}},pos:{q0:[70,90],q1:[260,90,-90],err:[70,240,90]},w:400,h:320,ex:["velocidad","d2","x1y2","2d"],
+  read:str=>{const out=[],shown=[];for(const ch of str.replace(/\s+/g,"")){if(/[A-Za-z_ñÑ]/.test(ch))out.push("letra");else if(/\d/.test(ch))out.push("dígito");else return{err:`«${ch}» no es letra ni dígito.`};shown.push(ch)}return{syms:out,shown}}},
+ num:{name:"Constantes: dígito+ ( . dígito+ )?",desc:"Σ = {dígito, punto}. q1 (entero) y q3 (real) son de aceptación. Las transiciones que no aparecen van a err.",alpha:["dígito","punto"],states:["q0","q1","q2","q3"],start:"q0",accept:["q1","q3"],
+  delta:{q0:{"dígito":"q1"},q1:{"dígito":"q1","punto":"q2"},q2:{"dígito":"q3"},q3:{"dígito":"q3"}},pos:{q0:[60,120],q1:[200,120,-90],q2:[340,120],q3:[480,120,-90]},w:550,h:190,ex:["3.1416","60","12.","3.14.15"],
+  read:str=>{const out=[],shown=[];for(const ch of str.replace(/\s+/g,"")){if(/\d/.test(ch))out.push("dígito");else if(ch===".")out.push("punto");else return{err:`«${ch}» no es dígito ni punto.`};shown.push(ch)}return{syms:out,shown}}}
+};
+
+/* ---------- Dibujo ---------- */
+function autoPos(M){const n=M.states.length,pos={};let w=440,h=200;
+  if(n<=3){M.states.forEach((s,i)=>pos[s]=[90+i*170,120,-90]);w=90+(n-1)*170+90}
+  else{w=460;h=360;const cx=230,cy=180,r=125;M.states.forEach((s,i)=>{const a=-Math.PI+i*2*Math.PI/n;pos[s]=[cx+r*Math.cos(a),cy+r*Math.sin(a),a*180/Math.PI]})}
+  return{pos,w,h}}
+dfaSVG.n=0;function dfaSVG(M,opt){opt=opt||{};const R=24;let pos=M.pos,W=M.w,H=M.h;if(!pos){const L=autoPos(M);pos=L.pos;W=L.w;H=L.h}
+  const vis=M.states.filter(s=>pos[s]);const E={};
+  vis.forEach(s=>M.alpha.forEach(a=>{const t=M.delta[s]&&M.delta[s][a];if(!t||!pos[t])return;const k=s+"\u0001"+t;(E[k]=E[k]||[]).push(a)}));
+  const P=s=>({x:pos[s][0],y:pos[s][1]});let edges="",labels="";
+  Object.keys(E).forEach(k=>{const[s,t]=k.split("\u0001");const lab=E[k].join(", ");const act=opt.edge&&opt.edge[0]===s&&opt.edge[1]===t;const cls=act?"edge act":"edge";
+    if(s===t){const p=P(s);let ang=pos[s][2];if(ang===undefined)ang=-90;const a=ang*Math.PI/180,d1=a-0.45,d2=a+0.45;
+      const x1=p.x+R*Math.cos(d1),y1=p.y+R*Math.sin(d1),x2=p.x+R*Math.cos(d2),y2=p.y+R*Math.sin(d2);
+      const c1x=p.x+(R+48)*Math.cos(a-0.7),c1y=p.y+(R+48)*Math.sin(a-0.7),c2x=p.x+(R+48)*Math.cos(a+0.7),c2y=p.y+(R+48)*Math.sin(a+0.7);
+      edges+=`<path class="${cls}" d="M${x1},${y1} C${c1x},${c1y} ${c2x},${c2y} ${x2},${y2}" marker-end="url(#MID)"/>`;
+      labels+=`<text class="elbl${act?" act":""}" x="${p.x+(R+50)*Math.cos(a)}" y="${p.y+(R+50)*Math.sin(a)+4}" text-anchor="middle">${esc(lab)}</text>`;return}
+    const a=P(s),b=P(t);const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy),nx=-dy/len,ny=dx/len;const rev=E[t+"\u0001"+s];const off=rev?26:0;
+    const mx=(a.x+b.x)/2+nx*off,my=(a.y+b.y)/2+ny*off;
+    const u1=Math.hypot(mx-a.x,my-a.y),u2=Math.hypot(mx-b.x,my-b.y);
+    const sx=a.x+(mx-a.x)/u1*R,sy=a.y+(my-a.y)/u1*R,ex=b.x+(mx-b.x)/u2*(R+2),ey=b.y+(my-b.y)/u2*(R+2);
+    edges+=`<path class="${cls}" d="M${sx},${sy} Q${mx},${my} ${ex},${ey}" marker-end="url(#MID)"/>`;
+    const lx=0.25*a.x+0.5*mx+0.25*b.x+nx*(off?10:11),ly=0.25*a.y+0.5*my+0.25*b.y+ny*(off?10:11);
+    labels+=`<text class="elbl${act?" act":""}" x="${lx}" y="${ly+4}" text-anchor="middle">${esc(lab)}</text>`});
+  let nodes="";vis.forEach(s=>{const p=P(s);const acc=M.accept.includes(s),act=opt.cur===s;const fs=s.length>3?11:13;
+    nodes+=`<circle class="st${act?" act":""}${s==="err"?" er":""}" cx="${p.x}" cy="${p.y}" r="${R}"/>${acc?`<circle class="st2${act?" act":""}" cx="${p.x}" cy="${p.y}" r="${R-5}"/>`:""}<text class="stx${act?" act":""}" x="${p.x}" y="${p.y+4}" text-anchor="middle" style="font-size:${fs}px">${esc(s)}</text>`});
+  const st=P(M.start);const startArr=`<path class="edge" d="M${st.x-R-34},${st.y} H${st.x-R-3}" marker-end="url(#MID)"/>`;
+  const mid="mh"+(++dfaSVG.n);
+  return(`<svg viewBox="-10 0 ${W+20} ${H}" width="${W+20}" role="img" aria-label="Diagrama de estados"><defs><marker id="${mid}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,0 L10,5 L0,10 z"/></marker></defs>${startArr}${edges}${nodes}${labels}</svg>`).split("#MID").join("#"+mid)}
+function tableHTML(M,opt){opt=opt||{};const rows=M.states.map(s=>{const cur=opt.cur===s;return`<tr class="${cur?"cur-row":""}"><th scope="row">${s===M.start?"→ ":""}${esc(s)}</th>${M.alpha.map(a=>{const t=(M.delta[s]&&M.delta[s][a])||"err";const hit=cur&&opt.sym===a;return`<td class="${hit?"hit":""}${t==="err"?" muted":""}">${esc(t)}</td>`}).join("")}<td>${M.accept.includes(s)?"1":"0"}</td></tr>`}).join("");
+  return`<table class="symt dfat"><thead><tr><th>SE / Estado</th>${M.alpha.map(a=>`<th>${esc(a)}</th>`).join("")}<th>Acepta</th></tr></thead><tbody>${rows}</tbody></table>`}
+
+/* ---------- Teoría: dibujos ---------- */
+document.getElementById("dEj1").innerHTML=dfaSVG(MACHINES.impar);document.getElementById("tEj1").innerHTML=tableHTML(MACHINES.impar);
+document.getElementById("dEj2").innerHTML=dfaSVG(MACHINES.cpui);document.getElementById("tEj2").innerHTML=tableHTML(MACHINES.cpui);
+document.getElementById("dEj3").innerHTML=dfaSVG(MACHINES.bpar);document.getElementById("tEj3").innerHTML=tableHTML(MACHINES.bpar);
+document.getElementById("dFor").innerHTML=dfaSVG(MACHINES.fortran);document.getElementById("tFor").innerHTML=tableHTML(MACHINES.fortran);
+document.getElementById("dId").innerHTML=dfaSVG(MACHINES.ident);document.getElementById("dNum").innerHTML=dfaSVG(MACHINES.num);
+(function(){const M=MACHINES.fortran,R=M.read("a, b, v(10), mat(5, n, 3), h");const tr=runM(M,R.syms);let s="0";R.shown.forEach((t,i)=>s+=` -${t}→ ${tr[i+1]}`);document.getElementById("trFor").textContent=s+"   ✓ acepta (estado 1)"})();
+
+/* ---------- Escáner (léxico de C) ---------- */
+const KW=["int","float","double","char","if","else","while","for","do","return","switch","case","void","const"];
+function cclass(c){if(/[A-Za-z_]/.test(c))return"letra";if(/[0-9]/.test(c))return"dígito";if(c===".")return"punto";if(/\s/.test(c))return"blanco";if("+-*/%".includes(c))return"aritm";if("=<>!".includes(c))return"rel";if("(){}[]".includes(c))return"agrup";if(";,".includes(c))return"punt";return"otro"}
+function scanLine(src){
+  const steps=[],toks=[];let st="q0",lex="",start=0,err=null;
+  const emit=(t,cls,i0)=>toks.push({v:t,cls,i:i0});const push=o=>{o.n=toks.length;steps.push(o)};
+  const close=(i)=>{if(st==="ID"){emit(lex,KW.includes(lex)?"palabra clave":"identificador",start)}else if(st==="NUM")emit(lex,"constante entera",start);else if(st==="REAL")emit(lex,"constante real",start);else if(st==="PT"){err={i,msg:`«${lex}» está incompleto: después del punto debe venir al menos un dígito.`};return false}lex="";st="q0";return true};
+  for(let i=0;i<=src.length&&!err;i++){
+    const c=i<src.length?src[i]:"";const k=c?cclass(c):"fin";const from=st;let act="";
+    if(st==="ID"){if(k==="letra"||k==="dígito"){lex+=c;push({i,c,from,to:"ID",act:"sigue el identificador"});continue}}
+    else if(st==="NUM"){if(k==="dígito"){lex+=c;push({i,c,from,to:"NUM",act:"sigue el entero"});continue}if(k==="punto"){lex+=c;st="PT";push({i,c,from,to:"PT",act:"punto decimal"});continue}if(k==="letra"){err={i,msg:`«${lex+c}…» no es válido: un identificador no puede empezar por dígito.`};break}}
+    else if(st==="PT"){if(k==="dígito"){lex+=c;st="REAL";push({i,c,from,to:"REAL",act:"parte decimal"});continue}}
+    else if(st==="REAL"){if(k==="dígito"){lex+=c;push({i,c,from,to:"REAL",act:"sigue la parte decimal"});continue}if(k==="punto"){err={i,msg:`«${lex}.» tiene dos puntos decimales.`};break}}
+    if(st!=="q0"){const L=lex;if(!close(i))break;act=`cierra «${L}» y emite ${toks[toks.length-1].cls}`}
+    if(!c){if(act)push({i,c:"fin",from,to:"q0",act});break}
+    if(k==="letra"){st="ID";lex=c;start=i;push({i,c,from,to:"ID",act:(act?act+"; ":"")+"empieza un identificador"});continue}
+    if(k==="dígito"){st="NUM";lex=c;start=i;push({i,c,from,to:"NUM",act:(act?act+"; ":"")+"empieza una constante"});continue}
+    if(k==="blanco"){push({i,c:"␣",from,to:"q0",act:(act?act+"; ":"")+"blanco: se descarta"});continue}
+    if(k==="aritm"||k==="rel"){let v=c;if(k==="rel"&&src[i+1]==="="){v+="=";i++}else if(c==="<"&&src[i+1]===">"){v+=">";i++}
+      if(c==="/"&&src[i+1]==="*"){const e=src.indexOf("*/",i+2);if(e<0){err={i,msg:"El comentario /* nunca se cierra."};break}push({i,c:"/*",from,to:"q0",act:(act?act+"; ":"")+"comentario: se descarta hasta */"});i=e+1;continue}
+      const cls=k==="aritm"?"operador aritmético":(v==="="?"asignación":"operador relacional");emit(v,cls,i);push({i,c:v,from,to:"q0",act:(act?act+"; ":"")+"emite "+cls});continue}
+    if(k==="agrup"){emit(c,"agrupación",i);push({i,c,from,to:"q0",act:(act?act+"; ":"")+"emite signo de agrupación"});continue}
+    if(k==="punt"){emit(c,c===";"?"fin de instrucción":"separador",i);push({i,c,from,to:"q0",act:(act?act+"; ":"")+"emite signo de puntuación"});continue}
+    err={i,msg:`Carácter no reconocido «${c}» en la posición ${i+1}.`};
+  }
+  return{steps,toks,err};
+}
+function balance(toks){const st=[],pair={")":"(","}":"{","]":"["};for(const t of toks){if(t.cls!=="agrupación")continue;if("({[".includes(t.v))st.push(t);else{const o=st.pop();if(!o)return{ok:false,msg:`Sobra «${t.v}» en la posición ${t.i+1}: no hay ningún signo abierto que cerrar.`};if(o.v!==pair[t.v])return{ok:false,msg:`«${t.v}» en la posición ${t.i+1} intenta cerrar «${o.v}»: se cruzan los signos.`}}}
+  if(st.length)return{ok:false,msg:`Falta cerrar «${st[st.length-1].v}» abierto en la posición ${st[st.length-1].i+1}.`};return{ok:true,msg:"Los signos de agrupación están bien apareados."}}
+let SC=null;
+function scanLoad(){const src=document.getElementById("scanIn").value;SC={src,R:scanLine(src),k:0};scanRender()}
+function scanRender(){const{src,R,k}=SC;const done=k>=R.steps.length;const s=R.steps[Math.min(k,R.steps.length)-1];const pos=s?s.i:-1;
+  document.getElementById("scanTape").innerHTML=[...src].map((c,i)=>`<span class="cell${i===pos?" on":""}${i<pos?" past":""}${c===" "?" sp":""}">${c===" "?"·":esc(c)}</span>`).join("");
+  document.getElementById("scanState").textContent="Estado: "+(s?s.to:"q0");
+  document.getElementById("scanMsg").textContent=s?`Leyó «${s.c}»: ${s.act}.`:"Pulsa «Leer un carácter» para empezar.";
+  const shownToks=done?R.toks:R.toks.slice(0,s?s.n:0);
+  document.getElementById("scanToks").innerHTML=shownToks.map(t=>`<div class="tok ${t.cls==="identificador"?"id":t.cls.startsWith("constante")?"num":""}"><span class="lx">${esc(t.v)}</span><span class="cl">${esc(t.cls)}</span></div>`).join("");
+  let out="";
+  if(done){if(R.err)out=`<div class="errbox"><b>Error léxico:</b> ${esc(R.err.msg)}</div>`;else{const B=balance(R.toks);const uniq=(f)=>[...new Set(R.toks.filter(f).map(t=>t.v))];
+    const vars=uniq(t=>t.cls==="identificador"),cons=uniq(t=>t.cls.startsWith("constante")),ops=R.toks.filter(t=>t.cls.startsWith("operador")||t.cls==="asignación").map(t=>t.v);
+    out=`<div class="outcomes"><div class="outcome"><span class="eyebrow">Variables (${vars.length})</span><p class="mono">${esc(vars.join(", ")||"—")}</p></div><div class="outcome"><span class="eyebrow">Constantes (${cons.length})</span><p class="mono">${esc(cons.join(", ")||"—")}</p></div><div class="outcome"><span class="eyebrow">Operadores (${ops.length})</span><p class="mono">${esc(ops.join("  ")||"—")}</p></div></div><div class="${B.ok?"okbox":"errbox"}">${B.ok?"":"<b>Agrupación:</b> "}${esc(B.msg)}</div><p class="muted" style="font-size:.88rem">${R.toks.length} tokens. Para revisar el apareamiento con cualquier cantidad de paréntesis se usa una pila; las máquinas de pila se estudian en la sesión 4.</p>`}}
+  document.getElementById("scanOut").innerHTML=out;
+  document.getElementById("scanStep").disabled=done;document.getElementById("scanRun").disabled=done}
+const SCAN_EX=["{ x = (a + b) * (c - 4.5) / 2; }","total = precio * 1.19 + envio;","if (velocidad >= 60) total = total + 1; /* multa */","y = (a + b * (c - d);","z = 3.x + 2;","m = {a + b) * 2;"];
+document.getElementById("scanEx").innerHTML=SCAN_EX.map(e=>`<button type="button" class="chip">${esc(e)}</button>`).join("");
+document.querySelectorAll("#scanEx .chip").forEach(b=>b.onclick=()=>{document.getElementById("scanIn").value=b.textContent;scanLoad()});
+document.getElementById("scanIn").value=SCAN_EX[0];
+document.getElementById("scanLoad").onclick=scanLoad;document.getElementById("scanIn").addEventListener("keydown",e=>{if(e.key==="Enter")scanLoad()});
+document.getElementById("scanReset").onclick=()=>{SC.k=0;scanRender()};document.getElementById("scanStep").onclick=()=>{SC.k++;scanRender()};document.getElementById("scanRun").onclick=()=>{SC.k=SC.R.steps.length;scanRender()};
+scanLoad();
+(function(){const R=scanLine("if (velocidad >= 60) total = total + 1;   /* multa */");document.getElementById("lexDemo").innerHTML=R.toks.map(t=>`<div class="tok ${t.cls==="identificador"?"id":t.cls.startsWith("constante")?"num":""}"><span class="lx">${esc(t.v)}</span><span class="cl">${esc(t.cls)}</span></div>`).join("")})();
+
+/* ---------- Simulador de MEF ---------- */
+let SIM=null;const simSel=document.getElementById("simM");
+simSel.innerHTML=Object.keys(MACHINES).map(k=>`<option value="${k}">${esc(MACHINES[k].name)}</option>`).join("");
+function simPick(){const M=MACHINES[simSel.value];document.getElementById("simDesc").textContent=M.desc;
+  document.getElementById("simEx").innerHTML=M.ex.map(e=>`<button type="button" class="chip">${e===""?"ε (cadena vacía)":esc(e)}</button>`).join("");
+  document.querySelectorAll("#simEx .chip").forEach((b,i)=>b.onclick=()=>{document.getElementById("simIn").value=M.ex[i];simLoad()});
+  document.getElementById("simIn").value=M.ex[0];simLoad()}
+function simLoad(){const M=MACHINES[simSel.value];const r=M.read(document.getElementById("simIn").value);SIM={M,r,k:0};simRender()}
+function simRender(){const{M,r,k}=SIM;const V=document.getElementById("simV");
+  if(r.err){document.getElementById("simD").innerHTML=dfaSVG(M);document.getElementById("simT").innerHTML=tableHTML(M);document.getElementById("simTape").innerHTML="";V.innerHTML=`<div class="errbox"><b>Entrada no válida:</b> ${esc(r.err)}</div>`;["simStep","simRun"].forEach(i=>document.getElementById(i).disabled=true);return}
+  const tr=runM(M,r.syms);const cur=tr[k];const done=k>=r.syms.length;const prev=k>0?tr[k-1]:null;
+  document.getElementById("simD").innerHTML=dfaSVG(M,{cur,edge:prev&&cur!=="err"?[prev,cur]:null});
+  document.getElementById("simT").innerHTML=tableHTML(M,{cur,sym:done?null:r.syms[k]});
+  document.getElementById("simTape").innerHTML=r.shown.length?r.shown.map((t,i)=>`<span class="cell${i===k?" on":""}${i<k?" past":""}" title="${esc(r.syms[i])}">${esc(t)}</span>`).join(""):`<span class="muted">ε (cadena vacía)</span>`;
+  let path=M.start;for(let i=0;i<k;i++)path+=` -${r.shown[i]}→ ${tr[i+1]}`;
+  if(!done)V.innerHTML=`<p class="mono" style="font-size:.85rem;overflow-wrap:anywhere">${esc(path)}</p><p class="muted">Estado actual: <b>${esc(cur)}</b>. Siguiente símbolo: <b>${esc(r.shown[k])}</b>${r.shown[k]!==r.syms[k]?` (${esc(r.syms[k])})`:""}.</p>`;
+  else{const ok=M.accept.includes(cur);V.innerHTML=`<p class="mono" style="font-size:.85rem;overflow-wrap:anywhere">${esc(path)}</p><div class="${ok?"okbox":"errbox"}"><b>${ok?"Cadena aceptada":"Cadena rechazada"}.</b> Terminó en ${esc(cur)}, ${ok?"que es de aceptación":cur==="err"?"el estado de error":"que no es de aceptación"}.</div>`}
+  document.getElementById("simStep").disabled=done;document.getElementById("simRun").disabled=done}
+simSel.onchange=simPick;document.getElementById("simLoad").onclick=simLoad;document.getElementById("simIn").addEventListener("keydown",e=>{if(e.key==="Enter")simLoad()});
+document.getElementById("simReset").onclick=()=>{SIM.k=0;simRender()};document.getElementById("simStep").onclick=()=>{SIM.k++;simRender()};document.getElementById("simRun").onclick=()=>{SIM.k=SIM.r.syms.length;simRender()};
+simPick();
+
+/* ---------- Laboratorio: construye la tabla ---------- */
+const PROBS=[
+ {t:"Secuencias de a y b con número de b par",a:["a","b"],f:w=>w.split("b").length%2===1,hint:"Basta recordar si la cantidad de b es par o impar."},
+ {t:"Secuencias de a y b con número de b impar",a:["a","b"],f:w=>w.split("b").length%2===0,hint:"Igual que el anterior, cambiando el estado de aceptación."},
+ {t:"Secuencias de 0 y 1 que terminan en 1",a:["0","1"],f:w=>w.endsWith("1"),hint:"Recuerda solo cuál fue el último símbolo leído."},
+ {t:"Número de unos impar y número de ceros par (ejemplo 2)",a:["0","1"],f:w=>(w.split("1").length-1)%2===1&&(w.split("0").length-1)%2===0,hint:"Necesitas recordar dos paridades: 4 estados."},
+ {t:"Secuencias de 0 y 1 que empiezan por 1 y luego tienen cantidad par de ceros",a:["0","1"],f:w=>w[0]==="1"&&(w.split("0").length-1)%2===0,hint:"Un estado inicial, dos de paridad después del primer 1 y el error si empieza por 0."},
+ {t:"Secuencias de a y b que terminan en aba",a:["a","b"],f:w=>w.endsWith("aba"),hint:"Cada estado recuerda cuánto del final «aba» llevas: nada, a, ab, aba."}
+];
+const labP=document.getElementById("labP"),labN=document.getElementById("labN");let LAB=null;
+labP.innerHTML=PROBS.map((p,i)=>`<option value="${i}">${esc(p.t)}</option>`).join("");
+function labInit(){const p=PROBS[+labP.value],n=+labN.value;const S=Array.from({length:n},(_,i)=>"q"+i);const keep=LAB&&LAB.p===+labP.value?LAB:null;
+  LAB={p:+labP.value,M:{alpha:p.a,states:S,start:"q0",accept:keep?keep.M.accept.filter(s=>S.includes(s)):[],delta:{}}};
+  S.forEach(s=>{LAB.M.delta[s]={};p.a.forEach(a=>{const o=keep&&keep.M.delta[s]&&keep.M.delta[s][a];LAB.M.delta[s][a]=o&&(S.includes(o)||o==="err")?o:""})});
+  document.getElementById("labDesc").textContent=`Alfabeto {${p.a.join(", ")}}. Pista: ${p.hint}`;labRender();document.getElementById("labOut").innerHTML="";document.getElementById("labScore").textContent=""}
+function labRender(){const M=LAB.M;const opts=[...M.states,"err"];
+  document.getElementById("labT").innerHTML=`<table class="symt dfat"><thead><tr><th>Estado</th>${M.alpha.map(a=>`<th>${esc(a)}</th>`).join("")}<th>Acepta</th></tr></thead><tbody>${M.states.map(s=>`<tr><th scope="row">${s==="q0"?"→ ":""}${s}</th>${M.alpha.map(a=>`<td><select data-s="${s}" data-a="${a}" aria-label="δ(${s}, ${a})"><option value="">—</option>${opts.map(o=>`<option${M.delta[s][a]===o?" selected":""}>${o}</option>`).join("")}</select></td>`).join("")}<td><input type="checkbox" data-acc="${s}" aria-label="${s} es de aceptación" ${M.accept.includes(s)?"checked":""}></td></tr>`).join("")}</tbody></table>`;
+  document.querySelectorAll("#labT select").forEach(el=>el.onchange=()=>{M.delta[el.dataset.s][el.dataset.a]=el.value;labDraw()});
+  document.querySelectorAll("#labT input[data-acc]").forEach(el=>el.onchange=()=>{const s=el.dataset.acc;M.accept=M.accept.filter(x=>x!==s);if(el.checked)M.accept.push(s);labDraw()});labDraw()}
+function labDraw(){const M=LAB.M;const D={...M,delta:{}};M.states.forEach(s=>{D.delta[s]={};M.alpha.forEach(a=>{const t=M.delta[s][a];if(t&&t!=="err")D.delta[s][a]=t})});document.getElementById("labD").innerHTML=dfaSVG(D)}
+function allStrings(a,maxL){const out=[""];let lvl=[""];for(let L=1;L<=maxL;L++){const nx=[];lvl.forEach(w=>a.forEach(c=>nx.push(w+c)));out.push(...nx);lvl=nx}return out}
+document.getElementById("labTest").onclick=()=>{const M=LAB.M,p=PROBS[LAB.p];const empty=[];M.states.forEach(s=>M.alpha.forEach(a=>{if(!M.delta[s][a])empty.push(`δ(${s}, ${a})`)}));
+  const out=document.getElementById("labOut");if(empty.length){out.innerHTML=`<div class="errbox"><b>La tabla está incompleta.</b> Llena ${esc(empty.slice(0,4).join(", "))}${empty.length>4?"…":""}. Si una celda no debe tener transición, elige err.</div>`;return}
+  if(!M.accept.length){out.innerHTML=`<div class="errbox"><b>No hay estados de aceptación.</b> Marca al menos uno en la columna «Acepta».</div>`;return}
+  const all=allStrings(p.a,9);let ok=0,bad=null;all.forEach(w=>{const r=accepts(M,[...w])===p.f(w);if(r)ok++;else if(!bad)bad=w});
+  document.getElementById("labScore").textContent=`${ok}/${all.length}`;
+  if(!bad)out.innerHTML=`<div class="okbox"><b>Tu MEF es correcta.</b> Coincide con la respuesta en las ${all.length} cadenas de hasta 9 símbolos.</div>`;
+  else{const tr=runM(M,[...bad]);let path=M.start;[...bad].forEach((c,i)=>path+=` -${c}→ ${tr[i+1]}`);const should=p.f(bad);
+    out.innerHTML=`<div class="errbox"><b>Todavía no.</b> Acierta en ${ok} de ${all.length} cadenas. La primera diferencia es <code>${bad===""?"ε (cadena vacía)":esc(bad)}</code>: ${should?"debería aceptarse y tu MEF la rechaza":"debería rechazarse y tu MEF la acepta"}.</div><p class="mono muted" style="font-size:.85rem;overflow-wrap:anywhere">Recorrido: ${esc(path)}</p>`}};
+document.getElementById("labClear").onclick=()=>{LAB=null;labInit()};
+labP.onchange=()=>{LAB=null;labInit()};labN.onchange=labInit;labInit();
+
+/* ================= utilidades ================= */
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function rng(seed){let s=seed>>>0;return function(){s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function sh(a,r){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function fnv(s,seed){let h=seed>>>0||0x811c9dc5;for(const ch of s){h^=ch.codePointAt(0);h=Math.imul(h,0x01000193)>>>0}return h>>>0}
+function sGet(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}}
+function sSet(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function sDel(k){try{localStorage.removeItem(k)}catch(e){}}
+const coma=n=>n.toFixed(1).replace(".",",");
+
+/* ================= prueba inicial (diagnóstica) ================= */
+const DIAG=[
+ ["Un componente del lenguaje es:",["Un identificador","Una línea","Una instrucción","Un bloque de instrucciones"],"Los componentes léxicos son unidades mínimas con sentido: identificadores, constantes, operadores."],
+ ["Para recorrer por caracteres una instrucción debo:",["Usar un ciclo que recorra con una variable hasta el fin de la cadena","Capturar el tamaño de la cadena","Recorrer hasta encontrar caracteres especiales","Usar variables temporales de almacenamiento"],"El análisis léxico lee carácter a carácter con un ciclo hasta el final de la línea."],
+ ["Las variables se diferencian de las constantes numéricas en:",["El carácter de inicio","La cantidad de caracteres","Que las constantes pueden empezar con una letra","Que las variables son solo numéricas"],"Un identificador empieza por letra; una constante numérica, por dígito."],
+ ["En la línea  x = y + 1; , ¿cuántas palabras o símbolos con sentido propio hay?",["6","3","5","9"],"x, =, y, +, 1 y ; son seis componentes."],
+ ["¿Qué hace un semáforo que pasa de verde a amarillo y de amarillo a rojo según el tiempo?",["Cambia de estado según una entrada, como una máquina de estado finito","Guarda todos los colores anteriores","Funciona como una pila","Ejecuta un programa compilado"],"Un número fijo de estados y transiciones: es la idea de una MEF."]
+];
+let DIAGSET=[];
+function renderDiag(){
+  DIAGSET=shuffle(DIAG).map(q=>({q:q[0],c:q[1][0],o:shuffle(q[1]),e:q[2],sel:null}));
+  const box=document.getElementById("diagList");document.getElementById("diagScore").textContent="";
+  box.innerHTML=DIAGSET.map((q,i)=>`<div class="q"><p class="stem">${i+1}. ${esc(q.q)}</p><div class="opts">${q.o.map((o,j)=>`<button type="button" class="opt" data-q="${i}" data-o="${j}"><span class="k">${"abcd"[j]})</span><span>${esc(o)}</span></button>`).join("")}</div><p class="fb" id="dfb${i}"></p></div>`).join("");
+  box.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{if(b.disabled)return;const i=+b.dataset.q;box.querySelectorAll(`.opt[data-q="${i}"]`).forEach(x=>x.classList.remove("sel"));b.classList.add("sel");DIAGSET[i].sel=+b.dataset.o});
+}
+document.getElementById("diagCheck").onclick=()=>{
+  const box=document.getElementById("diagList");if(DIAGSET.some(q=>q.sel===null)){document.getElementById("diagScore").textContent=`Responde las ${DIAGSET.length}`;return}
+  let ok=0;DIAGSET.forEach((q,i)=>{const good=q.o[q.sel]===q.c;if(good)ok++;box.querySelectorAll(`.opt[data-q="${i}"]`).forEach((x,j)=>{x.disabled=true;if(j===q.sel)x.classList.add(good?"right":"wrong")});const f=document.getElementById("dfb"+i);f.className="fb "+(good?"good":"badc");f.textContent=(good?"Correcto. ":"Incorrecto. ")+q.e});
+  document.getElementById("diagScore").textContent=`${ok}/${DIAGSET.length} aciertos`};
+document.getElementById("diagNew").onclick=renderDiag;
+renderDiag();
+
+/* ================= motor de actividades calificadas ================= */
+const SESSION="2",VERSION="COMP-S2-v1",SALT="uRm-c0mp1-s2#2026",KEYSALT="uRm-c0mp1-s1#2026",WA="573133735510",PIN_H=526884534,MAXEXIT=3;
+const SALTS={"1":"uRm-c0mp1-s1#2026","2":"uRm-c0mp1-s2#2026"};
+const BANK_ENC="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",KEY="cmpS2k";
+const BANK=(function(){const b=atob(BANK_ENC);const u=new Uint8Array(b.length);for(let i=0;i<b.length;i++)u[i]=b.charCodeAt(i)^KEY.charCodeAt(i%KEY.length);return JSON.parse(new TextDecoder().decode(u))})();
+const COMPS={
+  practica:{name:"Práctica calificada",short:"PRÁCTICA",where:"En clase · individual",n:10,min:15,key:true,weight:20,desc:"10 preguntas aleatorias: funciones del léxico, tokens, patrones y lexemas, y ejecución de las MEF del módulo."},
+  clase:{name:"Actividad en clase 2 · Ejecuta tu MEF",short:"ACTIVIDAD EN CLASE",where:"En clase · individual",n:10,min:20,key:true,weight:20,desc:"Recibes una MEF de 4 estados generada solo para ti, con su tabla y su diagrama. La ejecutas a mano sobre varias cadenas y respondes 10 preguntas."},
+  casa:{name:"Actividad en casa 1 · Reto en línea",short:"ACTIVIDAD EN CASA",where:"En casa · individual · antes de la sesión 3",n:10,min:40,key:false,weight:20,desc:"Una instrucción de C única para ti: la analizas carácter por carácter (tokens, variables, constantes, operadores, agrupación) y respondes casos de diseño de MEF."},
+  eval:{name:"Evaluación de la sesión",short:"EVALUACIÓN",where:"En clase · individual",n:12,min:15,key:true,weight:40,desc:"12 preguntas tomadas al azar de un banco de 24, con las opciones barajadas."}
+};
+const ORDERCOMP=["practica","clase","casa","eval"];
+
+function bankItem(it,r){const c=it[2][0];let o=it[2].length>4?[c,...sh(it[2].slice(1),r).slice(0,3)]:it[2].slice();return{id:it[0],q:it[1],o:sh(o,r),h:fnv(it[0]+"|"+c+SALT),exp:it[3]}}
+function mk(id,q,correct,others,exp,r){const set=[String(correct)];for(const x of others){const s=String(x);if(!set.includes(s))set.push(s);if(set.length===4)break}
+  let k=1;while(set.length<4&&k<30){const f=String(+correct+(k%2?k+2:-(k+2)));if(+f>0&&!set.includes(f))set.push(f);k++}
+  return{id,q,o:sh(set,r),h:fnv(id+"|"+set[0]+SALT),exp}}
+function mkx(id,q,correct,opts,exp,r){return{id,q,o:sh(opts,r),h:fnv(id+"|"+correct+SALT),exp}}
+const nums=(c,r)=>sh([c+1,c-1,c+2,c-2,c+3].filter(x=>x>0),r);
+const SI="Sí, termina en un estado de aceptación",NO="No, termina en un estado que no es de aceptación";
+function rstr(r,alpha,L){let s="";for(let i=0;i<L;i++)s+=alpha[Math.floor(r()*alpha.length)];return s}
+const pathStr=(M,w)=>{const tr=runM(M,[...w]);return tr.join(" → ")};
+
+/* MEF aleatoria de 4 estados */
+function genDFA(r){
+  for(let tries=0;tries<200;tries++){
+    const alpha=r()<0.5?["0","1"]:["a","b"];const S=["A","B","C","D"];const delta={};
+    S.forEach(s=>{delta[s]={};alpha.forEach(a=>delta[s][a]=S[Math.floor(r()*4)])});
+    const seen=new Set(["A"]);let fr=["A"];while(fr.length){const n=[];fr.forEach(s=>alpha.forEach(a=>{const t=delta[s][a];if(!seen.has(t)){seen.add(t);n.push(t)}}));fr=n}
+    if(seen.size<4)continue;
+    const k=1+Math.floor(r()*2);const acc=sh(S,r).slice(0,k).sort();
+    const M={alpha,states:S,start:"A",accept:acc,delta,pos:{A:[90,80,-135],B:[330,80,-45],C:[330,270,45],D:[90,270,135]},w:420,h:350};
+    const loops=S.filter(s=>alpha.every(a=>delta[s][a]===s));if(loops.length>1)continue;
+    let acc5=0,rej5=0;for(let i=0;i<40;i++){const w=rstr(r,alpha,3+Math.floor(r()*3));accepts(M,[...w])?acc5++:rej5++}
+    if(acc5<6||rej5<6)continue;
+    return M}
+  return null}
+function dfaText(M){return M.states.map(s=>`${s}(${M.alpha.map(a=>a+"→"+M.delta[s][a]).join(",")})`).join(" ")+` · inicial A · aceptación {${M.accept.join(",")}}`}
+
+/* instrucción de C aleatoria */
+const NAMES=["base","altura","tasa","total","precio","peso","masa","vel","tiempo","dist","fuerza","area","costo","saldo","nota","x","y","z","k","m","renta","carga","flujo","temp","neto","bono"];
+const TPL=["A = (B + I) * C / R;","{ A = B * (C - R) + I; }","A = (B - I) / (C + R) * D;","{ A = (B + C) * R - I / D; }","A = B / (I + C * R);","{ A = (B + R) * (C - I); }"];
+const REALS=["4.5","0.25","12.75","3.14","1.19","0.5","2.75","9.81"];
+function genLine(r){const t=TPL[Math.floor(r()*TPL.length)];const ns=sh(NAMES,r);let line=t.replace(/[ABCD]/g,m=>ns["ABCD".indexOf(m)]).replace("I",String(2+Math.floor(r()*97))).replace("R",REALS[Math.floor(r()*REALS.length)]);
+  let kind="ok";const x=r();
+  if(x<0.3&&line.includes("}")){line=line.replace("}",") }");kind="cruza"}
+  else if(x<0.3){const i=line.lastIndexOf(")");line=line.slice(0,i)+line.slice(i+1);kind="falta"}
+  return{line:line.replace(/\s+/g," ").replace(/\s;/g,";"),kind}}
+
+function buildItems(comp,seed){
+  const r=rng(seed);let items=[],ctx=null;
+  if(comp==="eval"){items=sh(BANK.eval,r).slice(0,12).map(it=>bankItem(it,r))}
+  if(comp==="practica"){
+    items=items.concat(sh(BANK.lex,r).slice(0,4).map(it=>bankItem(it,r)));
+    items=items.concat(sh(BANK.vf,r).slice(0,3).map(it=>bankItem(it,r)));
+    const M2=MACHINES.cpui,M1=MACHINES.impar;
+    const w1=rstr(r,["0","1"],5+Math.floor(r()*2));const f1=runM(M2,[...w1]).pop();
+    items.push(mk("PG1",`En la MEF del ejemplo 2 (CPUP inicial; ceros pares y unos impares = CPUI), ¿en qué estado termina la cadena ${w1}?`,f1,sh(M2.states.filter(s=>s!==f1),r),`${w1} tiene ${(w1.match(/0/g)||[]).length} ceros y ${(w1.match(/1/g)||[]).length} unos: ${pathStr(M2,w1)}.`,r));
+    const w2=rstr(r,["0","1"],5+Math.floor(r()*3));const a2=accepts(M1,[...w2]);
+    items.push(mkx("PG2",`¿La MEF «número de unos impar» acepta la cadena ${w2}?`,a2?SI:NO,[SI,NO],`${w2} tiene ${(w2.match(/1/g)||[]).length} unos: ${pathStr(M1,w2)}.`,r));
+    let acc=null,rej=[];for(let i=0;i<200&&(acc===null||rej.length<3);i++){const w=rstr(r,["0","1"],3+Math.floor(r()*3));if(accepts(M2,[...w])){if(!acc)acc=w}else if(!rej.includes(w))rej.push(w)}
+    items.push(mk("PG3","¿Cuál de estas cadenas acepta la MEF del ejemplo 2 (número de unos impar y número de ceros par)?",acc,rej,`${acc} tiene ${(acc.match(/0/g)||[]).length} ceros (par) y ${(acc.match(/1/g)||[]).length} unos (impar).`,r));
+    items=sh(items,r);
+  }
+  if(comp==="clase"){
+    const M=genDFA(r);ctx={label:"Tu MEF (A es el estado inicial; doble círculo = aceptación)",html:`<div class="trace"><div class="scroll">${tableHTML(M)}</div><div class="diagram">${dfaSVG(M)}</div></div>`,text:"MEF asignada: "+dfaText(M)};
+    const fin=w=>runM(M,[...w]).pop();const A=M.alpha;
+    const w1=rstr(r,A,5);items.push(mk("K1",`¿En qué estado termina tu MEF al leer ${w1}?`,fin(w1),sh(M.states.filter(s=>s!==fin(w1)),r),`Recorrido: ${pathStr(M,w1)}.`,r));
+    const w2=rstr(r,A,6);const a2=accepts(M,[...w2]);items.push(mkx("K2",`¿Tu MEF acepta la cadena ${w2}?`,a2?SI:NO,[SI,NO],`Recorrido: ${pathStr(M,w2)}. ${fin(w2)} ${a2?"es":"no es"} de aceptación.`,r));
+    const w3=rstr(r,A,6);items.push(mk("K3",`¿En qué estado termina tu MEF al leer ${w3}?`,fin(w3),sh(M.states.filter(s=>s!==fin(w3)),r),`Recorrido: ${pathStr(M,w3)}.`,r));
+    const w4=rstr(r,A,4);const p4=runM(M,[...w4]);const wrong=[];for(let t=0;t<40&&wrong.length<3;t++){const q=p4.slice();const j=1+Math.floor(r()*(q.length-1));q[j]=sh(M.states.filter(s=>s!==q[j]),r)[0];const s=q.join(" → ");if(!wrong.includes(s))wrong.push(s)}
+    items.push(mk("K4",`¿Cuál es la secuencia de estados al leer ${w4}?`,p4.join(" → "),wrong,`Se aplica δ símbolo por símbolo: ${p4.join(" → ")}.`,r));
+    const pickSet=(want)=>{let good=null,bad=[];for(let i=0;i<400&&(good===null||bad.length<3);i++){const w=rstr(r,A,3+Math.floor(r()*3));if(accepts(M,[...w])===want){if(!good)good=w}else if(!bad.includes(w)&&w!==good)bad.push(w)}return{good,bad}};
+    const s5=pickSet(true);items.push(mk("K5","¿Cuál de estas cadenas acepta tu MEF?",s5.good,s5.bad,`Recorrido: ${pathStr(M,s5.good)}, que termina en aceptación.`,r));
+    const s6=pickSet(false);items.push(mk("K6","¿Cuál de estas cadenas NO acepta tu MEF?",s6.good,s6.bad,`Recorrido: ${pathStr(M,s6.good)}, que no termina en aceptación.`,r));
+    const st=M.states[Math.floor(r()*4)],sy=A[Math.floor(r()*2)],to=M.delta[st][sy];items.push(mk("K7",`En tu tabla, ¿cuál es δ(${st}, ${sy})?`,to,sh(M.states.filter(s=>s!==to),r),`Fila ${st}, columna ${sy}: ${to}.`,r));
+    const e=M.accept.includes("A");items.push(mkx("K8","¿Tu MEF acepta la cadena vacía ε?",e?"Sí, porque el estado inicial A es de aceptación":"No, porque el estado inicial A no es de aceptación",["Sí, porque el estado inicial A es de aceptación","No, porque el estado inicial A no es de aceptación"],"Sin símbolos la máquina se queda en A.",r));
+    items=items.concat(sh(BANK.mef,r).slice(0,2).map(it=>bankItem(it,r)));
+  }
+  if(comp==="casa"){
+    const G=genLine(r);const R=scanLine(G.line);const T=R.toks;ctx={label:"Tu instrucción de C",html:`<code class="big">${esc(G.line)}</code>`,text:"Instrucción asignada: "+G.line};
+    items.push(mk("H1","¿Cuántos tokens produce el analizador léxico para tu instrucción?",T.length,nums(T.length,r),`Tokens: ${T.map(t=>t.v).join("  ")} (${T.length}).`,r));
+    const vars=[...new Set(T.filter(t=>t.cls==="identificador").map(t=>t.v))];
+    items.push(mk("H2","¿Cuántas variables distintas hay en tu instrucción?",vars.length,nums(vars.length,r),`Variables: ${vars.join(", ")}.`,r));
+    const real=T.find(t=>t.cls==="constante real").v,ent=T.find(t=>t.cls==="constante entera").v;
+    items.push(mk("H3","¿Cuál de estos lexemas es una constante real?",real,[ent,vars[0],vars[1],"="],`${real} tiene punto decimal: dígitos, punto y dígitos.`,r));
+    const ops=T.filter(t=>t.cls==="operador aritmético").length;
+    items.push(mk("H4","¿Cuántos operadores aritméticos (+ - * /) hay en tu instrucción?",ops,nums(ops,r),`Operadores: ${T.filter(t=>t.cls==="operador aritmético").map(t=>t.v).join(" ")}. El = es asignación.`,r));
+    const B=balance(T);const OK="Sí, cada signo que abre tiene su cierre en el orden correcto",F1="No, falta un signo de cierre",F2="No, un signo cierra a otro de distinto tipo",F3="No, sobra un signo de cierre";
+    const cor=B.ok?OK:(/^Falta/.test(B.msg)?F1:/^Sobra/.test(B.msg)?F3:F2);items.push(mkx("H5","¿Los signos de agrupación de tu instrucción están bien apareados?",cor,[OK,F1,F2,F3],B.msg,r));
+    const steps=["q0","q1"];const parts=real.split(".");for(let i=1;i<parts[0].length;i++)steps.push("q1");steps.push("q2");for(let i=0;i<parts[1].length;i++)steps.push("q3");
+    const cp=steps.join(" → ");const w1=steps.slice();w1[w1.indexOf("q2")]="q1";const w2=steps.filter(s=>s!=="q2");const w3=steps.slice(0,-1);
+    items.push(mk("H6",`¿Qué recorrido hace la MEF de constantes (q0 inicio, q1 entero, q2 punto, q3 real) al leer ${real}?`,cp,[w1.join(" → "),w2.join(" → "),w3.join(" → ")+(w3[w3.length-1]==="q2"?"":" → q2")],`Cada dígito antes del punto deja la máquina en q1; el punto lleva a q2 y cada dígito decimal a q3.`,r));
+    items=items.concat(sh(BANK.casa,r).slice(0,4).map(it=>bankItem(it,r)));
+  }
+  return{items,ctx};
+}
+
+/* identidad y llaves */
+const ID_K="c2s2_id",runK=c=>"c2s2_run_"+c,doneK=(c,d)=>`c2s2_done_${c}_${d}`,attK=c=>"c2s2_att_"+c;
+function todayKey(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function dayCode(){return String(fnv(todayKey()+"|clave|"+KEYSALT)%9000+1000)}
+function verif(body,salt){salt=salt||SALT;const norm=body.split("\n").map(l=>l.trim()).filter(Boolean).join("\n");const a=fnv(norm+salt),b=fnv(salt+norm,0x9747b28c);return(a.toString(16).padStart(8,"0").slice(0,4)+"-"+b.toString(16).padStart(8,"0").slice(0,4)).toUpperCase()}
+function activeRun(){for(const c of ORDERCOMP){const r=sGet(runK(c));if(r&&!r.finished)return r}return null}
+
+/* tarjetas de inicio */
+function renderStarts(){
+  const id=sGet(ID_K);
+  document.querySelectorAll(".gstart").forEach(el=>{
+    const c=el.dataset.comp,C=COMPS[c];const run=sGet(runK(c));const done=id&&sGet(doneK(c,id.doc));
+    let status="";
+    if(run&&!run.finished)status=`<div class="okbox">Tienes esta actividad en curso. Al continuar, la recarga cuenta como una salida.</div><div class="row"><button class="btn" type="button" data-act="resume">Continuar</button></div>`;
+    else if(done)status=`<div class="okbox"><b>Presentada.</b> Nota ${coma(done.grade)} / 5,0 · ${done.ok} de ${done.n} aciertos.</div><div class="row"><button class="btn ghost" type="button" data-act="view">Ver resultado y retroalimentación</button></div>`;
+    else status=`<div class="row"><button class="btn" type="button" data-act="start">Iniciar ${C.short.toLowerCase()}</button></div>`;
+    el.className="lab gstart";el.dataset.comp=c;
+    el.innerHTML=`<div class="lab-head"><div><span class="eyebrow">${C.where} · calificada</span><h2>${C.name}</h2></div></div><p class="muted">${C.desc}</p><div class="chips"><span class="chip">${C.n} preguntas</span><span class="chip">${C.min} minutos</span><span class="chip">1 intento</span><span class="chip">Nota 1,0–5,0</span>${C.key?'<span class="chip">Clave del día</span>':""}</div>${status}`;
+    const b=el.querySelector("[data-act]");if(b)b.onclick=()=>{if(b.dataset.act==="start")openReg(c);else if(b.dataset.act==="resume")resume(c);else showResult(sGet(runK(c)))};
+  });
+  renderSummary();
+}
+
+/* overlay */
+const exam=document.getElementById("exam");let RUN=null,ITEMS=null,tick=null,lastExit=0;
+function openOverlay(){exam.hidden=false;document.body.style.overflow="hidden";exam.scrollTop=0}
+function closeOverlay(){exam.hidden=true;exam.innerHTML="";exam.style.backgroundImage="";document.body.style.overflow="";renderStarts()}
+function openReg(c){
+  const C=COMPS[c];const id=sGet(ID_K);const act=activeRun();
+  if(act&&act.comp!==c){alertBox(`Tienes «${COMPS[act.comp].name}» en curso. Termínala antes de iniciar otra actividad.`);return}
+  openOverlay();const ro=id?"readonly":"";
+  exam.innerHTML=`<div class="exam-in"><div class="exam-bar"><div><div class="eyebrow">${C.where}</div><h2>${C.name}</h2></div></div>
+  <form class="qcard form" id="regForm2" novalidate>
+   <p class="muted">${C.n} preguntas · ${C.min} minutos · un solo intento · nota de 1,0 a 5,0. Ten a mano papel y lápiz.</p>
+   ${id?`<div class="okbox">Este equipo está registrado a nombre de <b>${esc(id.name)}</b>. Si no eres tú, pide al docente que libere el registro.</div>`:""}
+   <label for="rName">Nombre completo<input type="text" id="rName" autocomplete="name" ${ro} value="${id?esc(id.name):""}"></label>
+   <label for="rDoc">Documento de identidad<input type="text" id="rDoc" inputmode="numeric" ${ro} value="${id?esc(id.doc):""}"></label>
+   <label for="rMail">Correo institucional<input type="email" id="rMail" autocomplete="email" ${ro} value="${id?esc(id.mail):""}"></label>
+   <label for="rGroup">Grupo<input type="text" id="rGroup" ${ro} value="${id?esc(id.group):""}"></label>
+   ${C.key?'<label for="rKey">Clave del día (la dicta el docente)<input type="text" id="rKey" inputmode="numeric" autocomplete="off"></label>':""}
+   <label class="check" for="rHonest"><input type="checkbox" id="rHonest"> <span>Declaro que responderé de forma individual, sin ayuda de otras personas, apuntes digitales ni herramientas externas, y que entiendo que las salidas de la pantalla quedan registradas.</span></label>
+   <p class="fb badc" id="regErr" role="alert"></p>
+   <div class="row"><button class="btn" type="submit">Iniciar en pantalla completa</button><button class="btn ghost" type="button" id="regCancel">Cancelar</button></div>
+  </form></div>`;
+  document.getElementById("regCancel").onclick=closeOverlay;
+  document.getElementById("regForm2").onsubmit=e=>{e.preventDefault();
+    const v=k=>document.getElementById(k).value.trim();const err=document.getElementById("regErr");
+    const reg={name:v("rName").replace(/\s+/g," "),doc:v("rDoc").replace(/\D/g,""),mail:v("rMail"),group:v("rGroup")};
+    if(!reg.name||!reg.doc||!reg.mail||!reg.group){err.textContent="Completa nombre, documento, correo y grupo.";return}
+    if(reg.name.split(" ").length<2){err.textContent="Escribe nombre y apellido.";return}
+    if(!/^\S+@\S+\.\S+$/.test(reg.mail)){err.textContent="Escribe un correo válido, por ejemplo nombre@uniremington.edu.co.";return}
+    if(reg.doc.length<6){err.textContent="El documento debe tener al menos 6 dígitos.";return}
+    if(C.key&&v("rKey")!==dayCode()){err.textContent="La clave del día no es correcta. Pídela al docente.";return}
+    if(!document.getElementById("rHonest").checked){err.textContent="Debes aceptar la declaración de honestidad para iniciar.";return}
+    if(sGet(doneK(c,reg.doc))){err.textContent="Este documento ya presentó esta actividad. Solo hay un intento.";return}
+    if(!id)sSet(ID_K,reg);
+    const att=(sGet(attK(c))||[]);att.push({doc:reg.doc,at:Date.now()});sSet(attK(c),att);
+    RUN={comp:c,reg:id||reg,seed:(crypto.getRandomValues(new Uint32Array(1))[0])>>>0,ans:[],idx:0,start:Date.now(),exits:[],inc:[],finished:false,how:"",prevAtt:att.filter(a=>a.doc!==reg.doc).length,qt:[]};
+    sSet(runK(c),RUN);startRun();
+  };
+}
+function alertBox(t){openOverlay();exam.innerHTML=`<div class="exam-in"><div class="qcard"><p>${esc(t)}</p><div class="row"><button class="btn" id="okA" type="button">Entendido</button></div></div></div>`;document.getElementById("okA").onclick=closeOverlay}
+function resume(c){RUN=sGet(runK(c));if(!RUN||RUN.finished){renderStarts();return}RUN.exits.push({t:Date.now(),why:"recarga o reingreso"});sSet(runK(c),RUN);openOverlay();startRun()}
+function watermark(){try{const cv=document.createElement("canvas");cv.width=420;cv.height=220;const x=cv.getContext("2d");x.translate(210,110);x.rotate(-0.35);x.font="600 15px "+getComputedStyle(document.body).fontFamily;x.fillStyle=getComputedStyle(document.documentElement).getPropertyValue("--muted").trim()||"#888";x.globalAlpha=.13;x.textAlign="center";x.fillText(`${RUN.reg.name} · ${RUN.reg.doc}`,0,0);x.fillText(new Date(RUN.start).toLocaleString("es-CO"),0,22);exam.style.backgroundImage=`url(${cv.toDataURL()})`}catch(e){}}
+function startRun(){
+  ITEMS=buildItems(RUN.comp,RUN.seed);
+  exam.classList.add("locked");watermark();
+  try{const p=document.documentElement.requestFullscreen&&document.documentElement.requestFullscreen();if(p&&p.catch)p.catch(()=>{})}catch(e){}
+  ["copy","cut","paste","contextmenu","selectstart","dragstart","beforeprint"].forEach(ev=>document.addEventListener(ev,block,true));
+  document.addEventListener("keydown",keyBlock,true);document.addEventListener("keyup",keyUp,true);
+  document.addEventListener("visibilitychange",onVis);window.addEventListener("blur",onBlur);document.addEventListener("fullscreenchange",onFs);
+  if(RUN.exits.length>=MAXEXIT){finish("salidas");return}
+  if(left()<=0){finish("tiempo");return}
+  renderQ();clearInterval(tick);tick=setInterval(updClock,500);updClock();
+}
+function inc(why){if(!RUN||RUN.finished)return;RUN.inc.push({t:Date.now(),why});sSet(runK(RUN.comp),RUN);const w=document.getElementById("incWarn");if(w){w.hidden=false;w.textContent=`Incidentes: ${RUN.inc.length}`}}
+function block(e){if(RUN&&!RUN.finished&&!exam.hidden){e.preventDefault();if(e.type==="paste"||e.type==="copy")inc(e.type==="paste"?"intento de pegar":"intento de copiar")}}
+function keyBlock(e){if(!RUN||RUN.finished||exam.hidden)return;const k=(e.key||"").toLowerCase();
+  if(e.key==="F12"||((e.ctrlKey||e.metaKey)&&e.shiftKey&&["i","j","c"].includes(k))||((e.ctrlKey||e.metaKey)&&k==="u")){e.preventDefault();inc("atajo de herramientas de desarrollo");return}
+  if((e.ctrlKey||e.metaKey)&&["c","v","x","a","p","s","f"].includes(k)){e.preventDefault();inc("atajo bloqueado (Ctrl+"+k.toUpperCase()+")")}}
+function keyUp(e){if(RUN&&!RUN.finished&&!exam.hidden&&e.key==="PrintScreen")inc("captura de pantalla")}
+function regExit(why){if(!RUN||RUN.finished)return;const now=Date.now();if(now-lastExit<2000)return;lastExit=now;RUN.exits.push({t:now,why});sSet(runK(RUN.comp),RUN);
+  if(RUN.exits.length>=MAXEXIT)finish("salidas");else{const w=document.getElementById("exitWarn");if(w){w.textContent=`Salidas: ${RUN.exits.length}/${MAXEXIT}`;w.className="pill warn"}}}
+function onVis(){if(document.hidden)regExit("cambio de pestaña o aplicación")}
+function onBlur(){setTimeout(()=>{if(!document.hasFocus())regExit("cambio de ventana")},150)}
+function onFs(){if(!document.fullscreenElement)regExit("salió de pantalla completa")}
+function left(){return Math.max(0,COMPS[RUN.comp].min*60000-(Date.now()-RUN.start))}
+function updClock(){if(!RUN||RUN.finished)return;const l=left();const c=document.getElementById("clock");if(c){const m=Math.floor(l/60000),s=Math.floor(l%60000/1000);c.textContent=`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;c.classList.toggle("low",l<120000)}if(l<=0)finish("tiempo")}
+function renderQ(){
+  const C=COMPS[RUN.comp],i=RUN.idx,q=ITEMS.items[i],N=ITEMS.items.length;let sel=null;const shown=Date.now();
+  exam.innerHTML=`<div class="exam-in"><div class="exam-bar"><div><div class="eyebrow">${C.short} · ${esc(RUN.reg.name)} · ${esc(RUN.reg.doc)}</div><div style="font-weight:600">Pregunta ${i+1} de ${N}</div></div><div class="row"><span class="pill warn" id="incWarn" ${RUN.inc.length?"":"hidden"}>Incidentes: ${RUN.inc.length}</span><span class="pill ${RUN.exits.length?"warn":""}" id="exitWarn">Salidas: ${RUN.exits.length}/${MAXEXIT}</span><span class="clock" id="clock"></span></div></div>
+  <div class="progress"><div style="width:${i/N*100}%"></div></div>
+  ${ITEMS.ctx?`<div class="ctx"><span class="eyebrow">${esc(ITEMS.ctx.label)}</span>${ITEMS.ctx.html}</div>`:""}
+  <div class="qcard"><p class="stem">${esc(q.q)}</p><div class="opts">${q.o.map((x,j)=>`<button type="button" class="opt" data-j="${j}"><span class="k">${"abcd"[j]})</span><span class="mono-wrap">${esc(x)}</span></button>`).join("")}</div>
+  <div class="row"><button class="btn" id="ansBtn" type="button" disabled>${i<N-1?"Responder y continuar":"Responder y terminar"}</button><span class="muted" style="font-size:.85rem">No podrás volver a esta pregunta.</span></div></div></div>`;
+  exam.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{exam.querySelectorAll(".opt").forEach(x=>x.classList.remove("sel"));b.classList.add("sel");sel=+b.dataset.j;document.getElementById("ansBtn").disabled=false});
+  document.getElementById("ansBtn").onclick=()=>{if(sel===null||RUN.finished)return;RUN.ans[i]=q.o[sel];RUN.qt[i]=Math.round((Date.now()-shown)/1000);RUN.idx++;sSet(runK(RUN.comp),RUN);if(RUN.idx>=N)finish("manual");else renderQ()};
+  updClock();exam.scrollTop=0;
+}
+function dur(ms){const s=Math.round(ms/1000);return`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`}
+function stamp(t){const d=new Date(t);return d.toLocaleDateString("es-CO")+" "+d.toLocaleTimeString("es-CO",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}
+const HOW={manual:"entregada por el estudiante",tiempo:"entregada al agotarse el tiempo",salidas:"entregada automáticamente por 3 salidas"};
+function score(run,items){let ok=0;const det=items.items.map((q,i)=>{const a=run.ans[i];const good=a!==undefined&&fnv(q.id+"|"+a+SALT)===q.h;if(good)ok++;return{q,a,good}});const n=items.items.length;return{ok,n,det,grade:Math.round((1+4*ok/n)*10)/10}}
+function finish(how){
+  if(!RUN||RUN.finished)return;const C=COMPS[RUN.comp];
+  RUN.finished=true;RUN.how=how;RUN.end=Math.min(Date.now(),RUN.start+C.min*60000);clearInterval(tick);
+  const S=score(RUN,ITEMS);const state=S.grade>=3?"APROBADO":"NO APROBADO";
+  const answered=RUN.qt.filter(x=>x!==undefined);const avg=answered.length?Math.round(answered.reduce((a,b)=>a+b,0)/answered.length):0;
+  const body=[`COMPILADORES · SESIÓN 2 · ${C.short}`,`Estudiante: ${RUN.reg.name}`,`Documento: ${RUN.reg.doc}`,`Correo: ${RUN.reg.mail}`,`Grupo: ${RUN.reg.group}`,
+    `Nota: ${coma(S.grade)} / 5,0 (escala 1–5) · ${state}`,`Aciertos: ${S.ok} de ${S.n}`,
+    ITEMS.ctx?ITEMS.ctx.text:null,
+    `Inicio: ${stamp(RUN.start)}`,`Fin: ${stamp(RUN.end)}`,`Duración: ${dur(RUN.end-RUN.start)} · promedio ${avg} s por pregunta`,
+    `Salidas: ${RUN.exits.length}${RUN.exits.length?" ("+RUN.exits.map(x=>x.why).join("; ")+")":""}`,
+    `Incidentes: ${RUN.inc.length}${RUN.inc.length?" ("+[...new Set(RUN.inc.map(x=>x.why))].join("; ")+")":""}`,
+    `Otros intentos iniciados en este equipo: ${RUN.prevAtt||0}`,
+    `Estado: ${HOW[how]}`,`Versión: ${VERSION}`,
+    `Detalle: ${S.det.map((d,i)=>`${i+1}.${d.q.id}:${d.a===undefined?"-":(d.good?"C":"X")}`).join(" ")}`].filter(Boolean).join("\n");
+  const code=verif(body);RUN.msg=body+"\nCódigo de verificación: "+code;RUN.code=code;
+  sSet(runK(RUN.comp),RUN);sSet(doneK(RUN.comp,RUN.reg.doc),{grade:S.grade,ok:S.ok,n:S.n,code,at:RUN.end});
+  ["copy","cut","paste","contextmenu","selectstart","dragstart","beforeprint"].forEach(ev=>document.removeEventListener(ev,block,true));
+  document.removeEventListener("keydown",keyBlock,true);document.removeEventListener("keyup",keyUp,true);
+  document.removeEventListener("visibilitychange",onVis);window.removeEventListener("blur",onBlur);document.removeEventListener("fullscreenchange",onFs);
+  try{if(document.fullscreenElement)document.exitFullscreen().catch(()=>{})}catch(e){}
+  exam.classList.remove("locked");showResult(RUN);
+}
+function showResult(run){
+  if(!run||!run.finished)return;const C=COMPS[run.comp];const items=buildItems(run.comp,run.seed);const S=score(run,items);
+  openOverlay();
+  exam.innerHTML=`<div class="exam-in result"><div class="eyebrow">${C.name} · ${HOW[run.how]}</div>
+  <div class="row" style="align-items:flex-end;gap:16px"><span class="grade">${coma(S.grade)}</span><div><div style="font-weight:600;color:${S.grade>=3?"var(--ok)":"var(--bad)"}">${S.grade>=3?"APROBADO":"NO APROBADO"} · escala 1,0–5,0</div><div class="muted">${S.ok} de ${S.n} aciertos · ${dur(run.end-run.start)} · ${run.exits.length} salidas · ${run.inc.length} incidentes</div></div></div>
+  <div class="okbox"><b>Envía tu nota:</b> manda este resultado al docente por WhatsApp al <span class="mono">313 373 5510</span>. No modifiques el texto: el código de verificación detecta cualquier cambio.</div>
+  <div class="msg" id="msgBox">${esc(run.msg)}</div>
+  <div class="row"><a class="btn" style="text-decoration:none" href="https://wa.me/${WA}?text=${encodeURIComponent(run.msg)}" target="_blank" rel="noopener">Enviar nota por WhatsApp</a><button class="btn ghost" id="copyMsg" type="button">Copiar mensaje</button><button class="btn ghost" id="closeExam" type="button">Volver a la clase</button></div>
+  <p class="fb" id="copyFb"></p>
+  ${items.ctx?`<div class="ctx"><span class="eyebrow">${esc(items.ctx.label)}</span>${items.ctx.html}</div>`:""}
+  <h3>Retroalimentación</h3>
+  <div class="qlist">${S.det.map((d,i)=>`<div class="q fbq ${d.good?"good":"bad"}"><p class="stem">${i+1}. ${esc(d.q.q)}</p><p><span class="tagr ${d.good?"good":"bad"}">${d.good?"Correcta":(d.a===undefined?"Sin responder":"Incorrecta")}</span> <span class="muted">Tu respuesta:</span> <span class="mono-wrap">${d.a===undefined?"—":esc(d.a)}</span></p><p class="fb">${esc(d.q.exp)}</p></div>`).join("")}</div>
+  <div class="row"><button class="btn ghost" id="closeExam2" type="button">Volver a la clase</button></div></div>`;
+  document.getElementById("copyMsg").onclick=()=>copyText(run.msg,"msgBox","copyFb");
+  document.getElementById("closeExam").onclick=closeOverlay;document.getElementById("closeExam2").onclick=closeOverlay;
+}
+function copyText(t,boxId,fbId){const f=document.getElementById(fbId);const sel=()=>{const r=document.createRange();r.selectNodeContents(document.getElementById(boxId));const s=getSelection();s.removeAllRanges();s.addRange(r);f.textContent="Texto seleccionado: cópialo con Ctrl+C o mantén pulsado."};
+  try{navigator.clipboard.writeText(t).then(()=>f.textContent="Mensaje copiado. Pégalo en el chat del docente.").catch(sel)}catch(e){sel()}}
+
+/* consolidado */
+function renderSummary(){
+  const box=document.getElementById("sumBody");const id=sGet(ID_K);
+  if(!id){box.innerHTML='<p class="muted">Aún no has presentado actividades calificadas en este equipo. Aquí aparecerán tus notas de la práctica, las actividades y la evaluación.</p>';return}
+  const rows=ORDERCOMP.map(c=>({c,C:COMPS[c],d:sGet(doneK(c,id.doc))}));
+  const all=rows.every(r=>r.d);const fin=all?Math.round(rows.reduce((s,r)=>s+r.d.grade*r.C.weight,0)/100*10)/10:null;
+  box.innerHTML=`<p class="muted">${esc(id.name)} · ${esc(id.doc)} · grupo ${esc(id.group)}</p><div class="scroll"><table class="compare" style="min-width:520px"><thead><tr><th>Actividad</th><th>Peso</th><th>Aciertos</th><th>Nota</th><th>Código</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.C.name}</td><td>${r.C.weight} %</td><td>${r.d?`${r.d.ok}/${r.d.n}`:"—"}</td><td><b>${r.d?coma(r.d.grade):"Pendiente"}</b></td><td class="mono">${r.d?r.d.code:"—"}</td></tr>`).join("")}<tr><td><b>Nota de la sesión</b></td><td>100 %</td><td></td><td><b>${fin!==null?coma(fin):"Pendiente"}</b></td><td></td></tr></tbody></table></div>
+  <p class="muted" style="font-size:.88rem">El taller escrito lo califica el docente con la rúbrica y no entra en este cálculo automático.</p>
+  <div class="row"><button class="btn" type="button" id="sumSend" ${rows.some(r=>r.d)?"":"disabled"}>Enviar consolidado por WhatsApp</button></div>`;
+  const b=document.getElementById("sumSend");if(b)b.onclick=()=>{
+    const body=["COMPILADORES · SESIÓN 2 · CONSOLIDADO",`Estudiante: ${id.name}`,`Documento: ${id.doc}`,`Grupo: ${id.group}`,...rows.map(r=>`${r.C.short}: ${r.d?`${coma(r.d.grade)} (${r.d.ok}/${r.d.n}) código ${r.d.code}`:"pendiente"}`),`Nota de la sesión: ${fin!==null?coma(fin)+" / 5,0":"pendiente (faltan actividades)"}`,`Versión: ${VERSION}`].join("\n");
+    const msg=body+"\nCódigo de verificación: "+verif(body);
+    openOverlay();exam.innerHTML=`<div class="exam-in"><h2>Consolidado de notas</h2><div class="msg" id="sumBox">${esc(msg)}</div><div class="row"><a class="btn" style="text-decoration:none" href="https://wa.me/${WA}?text=${encodeURIComponent(msg)}" target="_blank" rel="noopener">Enviar por WhatsApp</a><button class="btn ghost" id="sumCopy" type="button">Copiar</button><button class="btn ghost" id="sumClose" type="button">Cerrar</button></div><p class="fb" id="sumFb"></p></div>`;
+    document.getElementById("sumCopy").onclick=()=>copyText(msg,"sumBox","sumFb");document.getElementById("sumClose").onclick=closeOverlay};
+}
+
+/* zona docente */
+document.getElementById("tComp").innerHTML=ORDERCOMP.map(c=>`<option value="${c}">${COMPS[c].name}</option>`).join("");
+document.getElementById("tPinBtn").onclick=()=>{const p=document.getElementById("tPin").value;if(fnv("pin|"+p+SALT)===PIN_H){document.getElementById("tLock").hidden=true;document.getElementById("tTools").hidden=false;document.getElementById("tKey").textContent=dayCode()}else document.getElementById("tPinErr").textContent="PIN incorrecto."};
+document.getElementById("verifyBtn").onclick=()=>{
+  const lines=document.getElementById("verifyIn").value.replace(/\r/g,"").replace(/\*/g,"").split("\n").map(l=>l.trim()).filter(Boolean);
+  const out=document.getElementById("verifyOut");const res=[];let cur=null;
+  lines.forEach(l=>{const mm=/^COMPILADORES · SESIÓN (\d+) ·/.exec(l);if(mm){cur={lines:[l],ses:mm[1]};res.push(cur)}else if(cur){if(/^Código de verificación:/i.test(l)){cur.code=l.split(":").slice(1).join(":").trim().toUpperCase();cur=null}else cur.lines.push(l)}});
+  if(!res.length){out.innerHTML='<div class="errbox"><b>No se encontró ningún mensaje.</b> Pega el texto completo desde «COMPILADORES · SESIÓN» hasta el código de verificación.</div>';return}
+  out.innerHTML=`<div class="scroll"><table class="compare" style="min-width:520px"><thead><tr><th>Actividad</th><th>Estudiante</th><th>Nota</th><th>Resultado</th></tr></thead><tbody>${res.map(r=>{const ok=!!(r.code&&SALTS[r.ses]&&verif(r.lines.join("\n"),SALTS[r.ses])===r.code);const g=k=>(r.lines.find(l=>l.startsWith(k))||"").slice(k.length).trim();
+    return`<tr><td>Sesión ${esc(r.ses)} · ${esc(r.lines[0].split("·").pop().trim())}</td><td>${esc(g("Estudiante:"))}<br><span class="muted">${esc(g("Documento:"))}</span></td><td>${esc(g("Nota:")||g("Nota de la sesión:"))}</td><td style="color:${ok?"var(--ok)":"var(--bad)"};font-weight:600">${ok?"Auténtico":(r.code?"Alterado":"Sin código")}</td></tr>`}).join("")}</tbody></table></div>`};
+document.getElementById("tReset").onclick=()=>{const d=document.getElementById("tDoc").value.replace(/\D/g,""),c=document.getElementById("tComp").value;const f=document.getElementById("tResetFb");if(!d){f.textContent="Escribe el documento.";return}sDel(doneK(c,d));const r=sGet(runK(c));if(r&&r.reg&&r.reg.doc===d)sDel(runK(c));f.textContent=`Listo: el documento ${d} puede presentar de nuevo «${COMPS[c].name}» en este equipo.`;renderStarts()};
+document.getElementById("tIdReset").onclick=()=>{if(activeRun()){document.getElementById("tResetFb").textContent="Hay una actividad en curso; termínala antes de liberar el registro.";return}sDel(ID_K);document.getElementById("tResetFb").textContent="Registro liberado: el próximo estudiante podrá registrarse en este equipo.";renderStarts()};
+
+/* arranque: cerrar intentos vencidos */
+(function(){for(const c of ORDERCOMP){const r=sGet(runK(c));if(r&&!r.finished&&Date.now()-r.start>COMPS[c].min*60000){RUN=r;ITEMS=buildItems(c,r.seed);r.exits=r.exits||[];r.inc=r.inc||[];r.qt=r.qt||[];finish("tiempo");exam.hidden=true;document.body.style.overflow=""}}renderStarts()})();
+
+</script>
